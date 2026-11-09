@@ -58,12 +58,20 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             SEASON="${{ inputs.season }}"
             MODE="${{ inputs.mode }}"
+          elif [ ! -f site/data/.history_complete ]; then
+            # First GitHub-only bootstrap: build every Sep-May season once so
+            # end users never see a "season not generated" message.
+            SEASON="all"
+            MODE="both"
           else
             SEASON="current"
             MODE="both"
           fi
           echo "Building season: $SEASON; mode: $MODE"
           python scripts/build_season.py --season "$SEASON" --mode "$MODE"
+          if [ "$SEASON" = "all" ]; then
+            touch site/data/.history_complete
+          fi
 
       - name: Save generated datasets to the repository
         shell: bash
