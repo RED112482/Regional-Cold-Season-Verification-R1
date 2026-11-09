@@ -264,6 +264,88 @@ def fetch_ndfd(points):
     return out
 
 
+
+def walk_coords(coords):
+    if not isinstance(coords, list):
+        return
+    if len(coords) >= 2 and isinstance(coords[0], (int, float)) and isinstance(coords[1], (int, float)):
+        yield float(coords[0]), float(coords[1])
+        return
+    for item in coords:
+        yield from walk_coords(item)
+
+
+def build_cwa_grids(counties, nx=17, ny=17):
+    bounds = {}
+    for feat in counties.get("features", []):
+        p = feat.get("properties") or {}
+        wfo = str(p.get("cwa") or "").upper()
+        if wfo not in WFO_IDS:
+            continue
+        for lon, lat in walk_coords((feat.get("geometry") or {}).get("coordinates") or []):
+            b = bounds.setdefault(wfo, [lon, lat, lon, lat])
+            b[0] = min(b[0], lon)
+            b[1] = min(b[1], lat)
+            b[2] = max(b[2], lon)
+            b[3] = max(b[3], lat)
+
+    fields = {}
+    for wfo, b in bounds.items():
+        pad_lon = 0.10
+        pad_lat = 0.08
+        xmin, ymin, xmax, ymax = b[0] - pad_lon, b[1] - pad_lat, b[2] + pad_lon, b[3] + pad_lat
+        lons = [xmin + i * (xmax - xmin) / (nx - 1) for i in range(nx)]
+        lats = [ymax - j * (ymax - ymin) / (ny - 1) for j in range(ny)]
+        points = []
+        for j, lat in enumerate(lats):
+            for i, lon in enumerate(lons):
+                points.append({"fips": f"{wfo}_{j}_{i}", "lat": lat, "lon": lon})
+
+        mint = fetch_ndfd(points)
+        apt = fetch_apparent(points)
+        day1 = []
+        day2 = []
+        day1apt = []
+        day2apt = []
+        for point in points:
+            key = point["fips"]
+            day1.append((mint.get(key) or {}).get("day1"))
+            day2.append((mint.get(key) or {}).get("day2"))
+            day1apt.append((apt.get(key) or {}).get("day1Apt"))
+            day2apt.append((apt.get(key) or {}).get("day2Apt"))
+
+        fields[wfo] = {
+            "nx": nx,
+            "ny": ny,
+            "xmin": xmin,
+            "xmax": xmax,
+            "ymin": ymin,
+            "ymax": ymax,
+            "day1": day1,
+            "day2": day2,
+            "day1Apt": day1apt,
+            "day2Apt": day2apt,
+            "source": "NOAA/NWS NDFD point-sampled field",
+        }
+    return fields
+
+
+def forecast_periods():
+    today = datetime.now(LOCAL_TZ).date()
+    return {
+        "day1": {
+            "name": "Tonight",
+            "startDate": today.isoformat(),
+            "endDate": (today + timedelta(days=1)).isoformat(),
+        },
+        "day2": {
+            "name": "Tomorrow Night",
+            "startDate": (today + timedelta(days=1)).isoformat(),
+            "endDate": (today + timedelta(days=2)).isoformat(),
+        },
+    }
+
+
 def main():
     counties = json.loads(COUNTIES.read_text(encoding="utf-8"))
     points = []
@@ -295,13 +377,17 @@ def main():
             county_rows[fips].update(vals)
             county_rows[fips].update(apparent.get(fips, {}))
 
+    fields = build_cwa_grids(counties)
+
     payload = {
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "NOAA/NWS NDFD minimum temperature + apparent temperature",
+        "periods": forecast_periods(),
+        "source": "NOAA/NWS NDFD minimum temperature + hourly apparent temperature",
         "wms": "https://mapservices.weather.noaa.gov/raster/services/NDFD/NDFD_temp/MapServer/WMSServer",
         "wmsLayers": {"day1": "140", "day2": "144"},
-        "method": "Official NDFD MinT raster display; county MinT and overnight MinApT guidance sampled at NOAA/NWS county representative points. MinApT is the minimum hourly NDFD apparent temperature from 6 PM through 6 AM local time.",
+        "method": "Official NDFD MinT raster display. Derived MinApT is the minimum of official hourly NDFD Apparent Temperature from 6 PM through 6 AM local time. County values and light contour fields are sampled directly from NOAA/NWS NDFD.",
         "counties": county_rows,
+        "fields": fields,
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
