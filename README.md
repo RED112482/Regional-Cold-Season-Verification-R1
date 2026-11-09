@@ -28,8 +28,20 @@ The viewer is designed around three tabs:
 - Click an event to compare affected counties against observed criteria.
 - Verification colors are an observational screening tool, not official NWS verification.
 
+### Forecast Products
+- Official NOAA/NWS NDFD minimum-temperature guidance for **Tonight** and **Tomorrow Night**.
+- MOB/LIX/JAN/BMX/TAE selector; defaults to MOB.
+- Official NDFD raster plus county representative-point lows.
+- Screens local Frost/Freeze and Cold Weather Advisory/Extreme Cold thresholds.
+- Guidance only; growing-season status, duration, wind/sky and forecaster judgment still matter.
+
+### Supplemental verification
+- Exact-window ASOS/AWOS/METAR remains the primary point-verification score.
+- NWS COOP 24-hour lows are added as distinctly labeled supplemental support points and do not change the primary hit/miss percentage.
+- IEM also exposes RWIS, USCRN, HADS/DCP and SCAN archives that can be added later as optional supplemental networks.
+
 ### Criteria / Methods
-- Documents the local thresholds and the county/station methodology.
+- Compact expandable tabs document the county counter and criteria methodology.
 
 ## Repository layout
 
@@ -93,4 +105,4 @@ The data builder deliberately makes IEM daily-summary requests sequentially and 
 
 ## Build
 
-Current viewer build: **REGIONAL-COLD-SEASON-GITHUB-R2**
+Current viewer build: **REGIONAL-COLD-SEASON-GITHUB-R5-NDFD-FORECAST**
