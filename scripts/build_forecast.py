@@ -192,7 +192,7 @@ def fetch_apparent(points):
     out = {}
     today = datetime.now(LOCAL_TZ).date()
     begin = datetime.combine(today, dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
-    end = datetime.combine(today + timedelta(days=6), dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+    end = datetime.combine(today + timedelta(days=7), dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
 
     for group in chunks(points, 80):
         list_lat_lon = " ".join(f'{p["lat"]:.5f},{p["lon"]:.5f}' for p in group)
@@ -213,7 +213,7 @@ def fetch_apparent(points):
             result = nearest_result(point["lat"], point["lon"], parsed)
             if not result:
                 out[point["fips"]] = {
-                    f"day{i}Apt": None for i in range(1, 6)
+                    f"day{i}Apt": None for i in range(1, 7)
                 }
                 continue
             out[point["fips"]] = {
@@ -222,7 +222,7 @@ def fetch_apparent(points):
                     result.get("times"),
                     today + timedelta(days=i - 1),
                 )
-                for i in range(1, 6)
+                for i in range(1, 7)
             }
     return out
 
@@ -242,7 +242,7 @@ def fetch_ndfd(points):
         params = {
             "listLatLon": list_lat_lon,
             "startDate": today,
-            "numDays": "5",
+            "numDays": "6",
             "Unit": "e",
             "format": "24 hourly",
             "XMLformat": "DWML",
@@ -256,14 +256,14 @@ def fetch_ndfd(points):
             result = nearest_result(p["lat"], p["lon"], parsed)
             if not result:
                 out[p["fips"]] = {
-                    **{f"day{i}": None for i in range(1, 6)},
+                    **{f"day{i}": None for i in range(1, 7)},
                     "validTimes": [],
                 }
                 continue
             vals = result.get("values", [])
             item = {
                 f"day{i}": vals[i - 1] if len(vals) >= i else None
-                for i in range(1, 6)
+                for i in range(1, 7)
             }
             item["validTimes"] = result.get("validTimes", [])[:5]
             out[p["fips"]] = item
@@ -310,12 +310,12 @@ def build_cwa_grids(counties, nx=17, ny=17):
         mint = fetch_ndfd(points)
         apt = fetch_apparent(points)
         field_values = {
-            **{f"day{i}": [] for i in range(1, 6)},
-            **{f"day{i}Apt": [] for i in range(1, 6)},
+            **{f"day{i}": [] for i in range(1, 7)},
+            **{f"day{i}Apt": [] for i in range(1, 7)},
         }
         for point in points:
             key = point["fips"]
-            for i in range(1, 6):
+            for i in range(1, 7):
                 field_values[f"day{i}"].append(
                     (mint.get(key) or {}).get(f"day{i}")
                 )
@@ -340,7 +340,7 @@ def forecast_periods():
     """Five overnight periods, rolling strictly at local midnight."""
     today = datetime.now(LOCAL_TZ).date()
     periods = {}
-    for i in range(1, 6):
+    for i in range(1, 7):
         start = today + timedelta(days=i - 1)
         end = start + timedelta(days=1)
         periods[f"day{i}"] = {
@@ -394,6 +394,7 @@ def main():
         "source": "NOAA/NWS NDFD minimum temperature + hourly apparent temperature",
         "wms": "https://mapservices.weather.noaa.gov/raster/services/NDFD/NDFD_temp/MapServer/WMSServer",
         "forecastNights": 5,
+        "bufferNights": 1,
         "method": "Official NDFD MinT raster display. Derived MinApT is the minimum of official hourly NDFD Apparent Temperature from 6 PM through 6 AM local time. County values and light contour fields are sampled directly from NOAA/NWS NDFD.",
         "counties": county_rows,
         "fields": fields,
