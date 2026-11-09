@@ -177,7 +177,7 @@
         </div>
       </div>
       <div class="section"><div class="section-title">Product Screening</div><div id="forecastGuidanceList" class="guidance-list"><div class="small">Loading forecast guidance…</div></div></div>
-      <div class="section forecast-note"><b>Guidance only:</b> the MinT background is the native NOAA/NWS NDFD MinTemp raster. MinApT is derived from official hourly NDFD Apparent Temperature over the labeled 6 PM–6 AM overnight period. Light contours are contextual; county product highlights remain the primary screening layer.</div>
+      <div class="section forecast-note"><b>Guidance only:</b> both filled fields use NOAA/NWS NDFD values with the attached temperature color palette. MinT comes from the official NDFD minimum-temperature forecast; MinApT is derived from official hourly NDFD Apparent Temperature over the labeled 6 PM–6 AM overnight period. County product highlights remain the primary screening layer.</div>
     </aside>
     <div class="map-wrap"><div id="forecastMap" class="map"></div><div id="status3" class="status"></div></div>
   </section>
@@ -366,10 +366,100 @@ function eventTimeLabel(e){const s=new Date(e.begin),z=new Date(e.end);if(isNaN(
 
 
 
-function renderForecast(){if(!state.forecastMap||!state.forecastData)return;const p=state.forecastPeriod,rows=Object.values(state.forecastData.counties||{}).filter(r=>r.wfo===state.forecastCwa),geo=state.data&&state.data.countiesGeoJson?state.data.countiesGeoJson:null,period=(state.forecastData.periods||{})[p]||{};if(state.forecastWmsLayer){state.forecastMap.removeLayer(state.forecastWmsLayer);state.forecastWmsLayer=null}if(state.forecastShowMint){const layerId=((state.forecastData.wmsLayers||{})[p]||(p==='day1'?'140':'144'));try{state.forecastWmsLayer=L.tileLayer.wms(state.forecastData.wms,{layers:layerId,format:'image/png',transparent:true,opacity:.38,version:'1.3.0',attribution:'NOAA/NWS NDFD MinT'}).addTo(state.forecastMap)}catch(e){console.warn('NDFD WMS unavailable',e)}}if(state.forecastCountyLayer){state.forecastMap.removeLayer(state.forecastCountyLayer);state.forecastCountyLayer=null}state.forecastContourLayer.clearLayers();state.forecastLabelLayer.clearLayers();const byFips=new Map(rows.map(r=>[String(r.fips).padStart(5,'0'),r]));if(state.forecastShowApt||state.forecastShowMint)renderForecastContours(p,rows);if(geo&&state.forecastShowCounties){state.forecastCountyLayer=L.geoJSON(geo,{style:f=>{const id=String((f.properties||{}).fips||'').padStart(5,'0'),r=byFips.get(id);if(!r)return{color:'#33485e',weight:.45,fillOpacity:0};const g=forecastGuidance(r,p),v=forecastVisibleProducts(g);return forecastStyle(v)},onEachFeature:(f,l)=>{const id=String((f.properties||{}).fips||'').padStart(5,'0'),r=byFips.get(id);if(!r)return;const g=forecastGuidance(r,p),t=num(r[p]),a=num(r[p+'Apt']),visible=forecastVisibleProducts(g),visLabel=visible.map(x=>x.name).join(' + ')||'No visible proposal';l.bindTooltip((r.county||'')+', '+r.state+' · MinT '+fmt(t)+'° · MinApT '+fmt(a)+'° · '+visLabel,{sticky:true,className:'county-tip'});l.bindPopup('<b>'+esc(r.county)+', '+esc(r.state)+'</b><br><small>'+esc((period.name||'NDFD')+' · '+forecastRangeLong(period))+'</small><div class="popup-rule"></div><div class="popup-grid"><span>NDFD MinT</span><strong>'+fmt(t)+'°F</strong><span>Derived NDFD MinApT</span><strong>'+fmt(a)+'°F</strong><span>Frost / Freeze</span><strong>'+esc(g.freezeLabel)+'</strong><span>Cold headline</span><strong>'+esc(g.coldLabel)+'</strong><span>All proposed</span><strong>'+esc(g.products.map(x=>x.name).join(' + ')||'None')+'</strong></div>')}}).addTo(state.forecastMap)}
+function renderForecast(){if(!state.forecastMap||!state.forecastData)return;const p=state.forecastPeriod,rows=Object.values(state.forecastData.counties||{}).filter(r=>r.wfo===state.forecastCwa),geo=state.data&&state.data.countiesGeoJson?state.data.countiesGeoJson:null,period=(state.forecastData.periods||{})[p]||{};if(state.forecastWmsLayer){state.forecastMap.removeLayer(state.forecastWmsLayer);state.forecastWmsLayer=null}if(state.forecastFieldLayer){state.forecastMap.removeLayer(state.forecastFieldLayer);state.forecastFieldLayer=null}renderForecastFilledField(p);if(state.forecastCountyLayer){state.forecastMap.removeLayer(state.forecastCountyLayer);state.forecastCountyLayer=null}state.forecastContourLayer.clearLayers();state.forecastLabelLayer.clearLayers();const byFips=new Map(rows.map(r=>[String(r.fips).padStart(5,'0'),r]));if(state.forecastShowContours&&(state.forecastShowApt||state.forecastShowMint))renderForecastContours(p,rows);if(geo&&state.forecastShowCounties){state.forecastCountyLayer=L.geoJSON(geo,{style:f=>{const id=String((f.properties||{}).fips||'').padStart(5,'0'),r=byFips.get(id);if(!r)return{color:'#33485e',weight:.45,fillOpacity:0};const g=forecastGuidance(r,p),v=forecastVisibleProducts(g);return forecastStyle(v)},onEachFeature:(f,l)=>{const id=String((f.properties||{}).fips||'').padStart(5,'0'),r=byFips.get(id);if(!r)return;const g=forecastGuidance(r,p),t=num(r[p]),a=num(r[p+'Apt']),visible=forecastVisibleProducts(g),visLabel=visible.map(x=>x.name).join(' + ')||'No visible proposal';l.bindTooltip((r.county||'')+', '+r.state+' · MinT '+fmt(t)+'° · MinApT '+fmt(a)+'° · '+visLabel,{sticky:true,className:'county-tip'});l.bindPopup('<b>'+esc(r.county)+', '+esc(r.state)+'</b><br><small>'+esc((period.name||'NDFD')+' · '+forecastRangeLong(period))+'</small><div class="popup-rule"></div><div class="popup-grid"><span>NDFD MinT</span><strong>'+fmt(t)+'°F</strong><span>Derived NDFD MinApT</span><strong>'+fmt(a)+'°F</strong><span>Frost / Freeze</span><strong>'+esc(g.freezeLabel)+'</strong><span>Cold headline</span><strong>'+esc(g.coldLabel)+'</strong><span>All proposed</span><strong>'+esc(g.products.map(x=>x.name).join(' + ')||'None')+'</strong></div>')}}).addTo(state.forecastMap)}
 rows.forEach(r=>{const t=num(r[p]),a=num(r[p+'Apt']);if(!isNum(r.lat)||!isNum(r.lon))return;const parts=[];if(state.forecastShowMint&&isNum(t))parts.push('<div class="tmain">T '+Math.round(t)+'°</div>');if(state.forecastShowApt&&isNum(a))parts.push('<div class="apt">ApT '+Math.round(a)+'°</div>');if(!parts.length)return;L.marker([r.lat,r.lon],{interactive:false,icon:L.divIcon({className:'forecast-temp-label',html:parts.join(''),iconSize:[76,29],iconAnchor:[38,14]})}).addTo(state.forecastLabelLayer)});
 const guidance=rows.map(r=>({row:r,g:forecastGuidance(r,p)})),temps=rows.map(r=>num(r[p])).filter(isNum),apts=rows.map(r=>num(r[p+'Apt'])).filter(isNum);document.getElementById('forecastColdest').textContent=(temps.length?Math.round(Math.min(...temps))+'°':'—')+' / '+(apts.length?Math.round(Math.min(...apts))+'°':'—');document.getElementById('forecastFreezeCount').textContent=guidance.filter(x=>x.g.products.some(p=>p.group==='freeze')).length;document.getElementById('forecastCwaCount').textContent=guidance.filter(x=>x.g.products.some(p=>p.group==='cold')).length;document.getElementById('forecastEcwCount').textContent=guidance.filter(x=>x.g.products.some(p=>p.name==='Extreme Cold Warning'||p.name==='Extreme Cold Watch')).length;document.getElementById('forecastUpdated').textContent=(period.name||'Forecast')+' · '+forecastRangeLong(period)+' · Updated '+formatForecastUpdate(state.forecastData.generatedUtc);const shown=guidance.map(x=>({row:x.row,g:x.g,visible:forecastVisibleProducts(x.g)})).filter(x=>x.visible.length);document.getElementById('forecastGuidanceList').innerHTML=shown.sort((a,b)=>forecastSortValue(a.row,p)-forecastSortValue(b.row,p)).map(x=>forecastGuidanceRow(x.row,x.g,p,x.visible)).join('')||'<div class="small">No counties meet an enabled proposed-product threshold.</div>'}
-function renderForecastContours(p,rows){const field=(state.forecastData.fields||{})[state.forecastCwa];if(!field)return;const mintThresholds=[37,32,25],aptThresholds=forecastAptThresholds(rows),notes=[];if(state.forecastShowMint){mintThresholds.forEach(t=>drawContour(field,field[p]||[],t,'#8ce8ff',1.1,.48,'MinT ≤ '+t+'°F'));notes.push('MinT '+mintThresholds.join('/'))}if(state.forecastShowApt){const vals=field[p+'Apt']||[];aptThresholds.forEach(t=>drawContour(field,vals,t,'#c7a9ff',1.1,.5,'MinApT ≤ '+t+'°F'));if(aptThresholds.length)notes.push('MinApT '+aptThresholds.join('/'))}document.getElementById('forecastContourNote').textContent=notes.length?'Light criteria contours: '+notes.join(' · ')+'°F. MinApT is derived from official hourly NDFD Apparent Temperature.':'Field contours are off.'}
+
+const TEMP_COLOR_STOPS=[
+  [0,[150,0,255]],[10,[243,12,255]],[20,[27,228,255]],[30,[0,21,255]],
+  [40,[2,3,151]],[50,[169,169,145]],[60,[246,246,15]],[70,[255,117,0]],
+  [80,[255,11,0]],[90,[147,15,15]],[100,[205,87,84]],[110,[237,4,246]],[120,[25,224,39]]
+];
+function forecastColorForTemp(v){
+  if(!isNum(v))return[0,0,0,0];
+  if(v<=TEMP_COLOR_STOPS[0][0])return TEMP_COLOR_STOPS[0][1].concat(220);
+  if(v>=TEMP_COLOR_STOPS[TEMP_COLOR_STOPS.length-1][0])return TEMP_COLOR_STOPS[TEMP_COLOR_STOPS.length-1][1].concat(220);
+  for(let i=0;i<TEMP_COLOR_STOPS.length-1;i++){
+    const a=TEMP_COLOR_STOPS[i],b=TEMP_COLOR_STOPS[i+1];
+    if(v>=a[0]&&v<=b[0]){
+      const t=(v-a[0])/(b[0]-a[0]);
+      return[
+        Math.round(a[1][0]+(b[1][0]-a[1][0])*t),
+        Math.round(a[1][1]+(b[1][1]-a[1][1])*t),
+        Math.round(a[1][2]+(b[1][2]-a[1][2])*t),
+        220
+      ];
+    }
+  }
+  return[0,0,0,0];
+}
+function bilinearGrid(field,values,gx,gy){
+  const nx=Number(field.nx),ny=Number(field.ny);
+  if(!nx||!ny)return null;
+  const x0=Math.max(0,Math.min(nx-1,Math.floor(gx))),x1=Math.max(0,Math.min(nx-1,x0+1));
+  const y0=Math.max(0,Math.min(ny-1,Math.floor(gy))),y1=Math.max(0,Math.min(ny-1,y0+1));
+  const tx=Math.max(0,Math.min(1,gx-x0)),ty=Math.max(0,Math.min(1,gy-y0));
+  const q00=num(values[y0*nx+x0]),q10=num(values[y0*nx+x1]),q01=num(values[y1*nx+x0]),q11=num(values[y1*nx+x1]);
+  const vals=[q00,q10,q01,q11].filter(isNum);
+  if(!vals.length)return null;
+  if(vals.length<4)return vals.reduce((a,b)=>a+b,0)/vals.length;
+  const top=q00*(1-tx)+q10*tx,bottom=q01*(1-tx)+q11*tx;
+  return top*(1-ty)+bottom*ty;
+}
+function renderForecastFilledField(p){
+  updateForecastTempLegend();
+  if(!state.forecastShowMint&&!state.forecastShowApt)return;
+  const field=(state.forecastData.fields||{})[state.forecastCwa];
+  if(!field)return;
+  const key=state.forecastShowApt?p+'Apt':p,values=field[key]||[];
+  if(!values.length)return;
+  const lonSpan=field.xmax-field.xmin,latSpan=field.ymax-field.ymin,w=520;
+  const h=Math.max(300,Math.min(620,Math.round(w*(latSpan/(lonSpan||1)))));
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext('2d'),image=ctx.createImageData(w,h),pixels=image.data;
+  for(let y=0;y<h;y++){
+    const gy=(y/(h-1))*(field.ny-1);
+    for(let x=0;x<w;x++){
+      const gx=(x/(w-1))*(field.nx-1),v=bilinearGrid(field,values,gx,gy),rgba=forecastColorForTemp(v),i=(y*w+x)*4;
+      pixels[i]=rgba[0];pixels[i+1]=rgba[1];pixels[i+2]=rgba[2];pixels[i+3]=rgba[3];
+    }
+  }
+  ctx.putImageData(image,0,0);
+  clipForecastCanvasToCwa(ctx,w,h,field);
+  const bounds=[[field.ymin,field.xmin],[field.ymax,field.xmax]];
+  state.forecastFieldLayer=L.imageOverlay(canvas.toDataURL('image/png'),bounds,{opacity:.62,interactive:false}).addTo(state.forecastMap);
+}
+function clipForecastCanvasToCwa(ctx,w,h,field){
+  const geo=state.data&&state.data.countiesGeoJson?state.data.countiesGeoJson:null;
+  if(!geo)return;
+  const feats=(geo.features||[]).filter(f=>String((f.properties||{}).cwa||'').toUpperCase()===state.forecastCwa);
+  if(!feats.length)return;
+  ctx.save();ctx.globalCompositeOperation='destination-in';ctx.beginPath();
+  function xy(lon,lat){return[(lon-field.xmin)/(field.xmax-field.xmin)*w,(field.ymax-lat)/(field.ymax-field.ymin)*h];}
+  function ringPath(ring){
+    if(!ring||!ring.length)return;
+    const p0=xy(ring[0][0],ring[0][1]);ctx.moveTo(p0[0],p0[1]);
+    for(let i=1;i<ring.length;i++){const p=xy(ring[i][0],ring[i][1]);ctx.lineTo(p[0],p[1]);}
+    ctx.closePath();
+  }
+  feats.forEach(f=>{
+    const g=f.geometry||{};
+    if(g.type==='Polygon')(g.coordinates||[]).forEach(ringPath);
+    if(g.type==='MultiPolygon')(g.coordinates||[]).forEach(poly=>(poly||[]).forEach(ringPath));
+  });
+  ctx.fillStyle='#fff';ctx.fill('evenodd');ctx.restore();
+}
+function addForecastTempLegend(){
+  const ctl=L.control({position:'bottomright'});
+  ctl.onAdd=()=>{const d=L.DomUtil.create('div','temp-legend');state.forecastTempLegendDiv=d;updateForecastTempLegend();return d;};
+  ctl.addTo(state.forecastMap);
+}
+function updateForecastTempLegend(){
+  const d=state.forecastTempLegendDiv;if(!d)return;
+  const name=state.forecastShowApt?'Derived NDFD MinApT':state.forecastShowMint?'NDFD MinT':'Temperature field off';
+  d.innerHTML='<div class="temp-legend-title">'+name+'</div><div class="temp-gradient"></div><div class="temp-gradient-labels"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span><span>120°F</span></div>';
+}
+function renderForecastContours(p,rows){const field=(state.forecastData.fields||{})[state.forecastCwa];if(!field)return;const mintThresholds=[37,32,25],aptThresholds=forecastAptThresholds(rows),notes=[];if(state.forecastShowMint){mintThresholds.forEach(t=>drawContour(field,field[p]||[],t,'#8ce8ff',1.1,.48,'MinT ≤ '+t+'°F'));notes.push('MinT '+mintThresholds.join('/'))}if(state.forecastShowApt){const vals=field[p+'Apt']||[];aptThresholds.forEach(t=>drawContour(field,vals,t,'#c7a9ff',1.1,.5,'MinApT ≤ '+t+'°F'));if(aptThresholds.length)notes.push('MinApT '+aptThresholds.join('/'))}document.getElementById('forecastContourNote').textContent=notes.length?'Light criteria contours: '+notes.join(' · ')+'°F. Filled field uses the attached temperature palette.':'Criteria contours are off.'}
 function forecastAptThresholds(rows){const vals=new Set();rows.forEach(r=>{const stat=(state.data&&state.data.countyStats&&state.data.countyStats[String(r.fips).padStart(5,'0')])||null,c=stat?stat.criteria:forecastFallbackCriteria(r);if(isNum(num(c&&c.coldAdvisory)))vals.add(num(c.coldAdvisory));if(isNum(num(c&&c.extremeCold)))vals.add(num(c.extremeCold))});return[...vals].sort((a,b)=>b-a)}
 function drawContour(field,values,threshold,color,weight,opacity,label){const segs=marchingSegments(field,values,threshold);segs.forEach(seg=>L.polyline(seg,{color,weight,opacity,interactive:true,dashArray:'4,4'}).bindTooltip(label,{sticky:true,className:'county-tip'}).addTo(state.forecastContourLayer))}
 function marchingSegments(field,values,threshold){const nx=Number(field.nx),ny=Number(field.ny);if(!nx||!ny||!Array.isArray(values)||values.length<nx*ny)return[];const out=[],dx=(field.xmax-field.xmin)/(nx-1),dy=(field.ymax-field.ymin)/(ny-1);function val(i,j){return num(values[j*nx+i])}function xy(i,j){return[field.ymax-j*dy,field.xmin+i*dx]}function cross(a,b){return isNum(a)&&isNum(b)&&((a<=threshold&&b>threshold)||(a>threshold&&b<=threshold))}function interp(pa,pb,va,vb){const t=(threshold-va)/((vb-va)||1e-9);return[pa[0]+(pb[0]-pa[0])*t,pa[1]+(pb[1]-pa[1])*t]}for(let j=0;j<ny-1;j++){for(let i=0;i<nx-1;i++){const v0=val(i,j),v1=val(i+1,j),v2=val(i+1,j+1),v3=val(i,j+1);if(![v0,v1,v2,v3].every(isNum))continue;const p0=xy(i,j),p1=xy(i+1,j),p2=xy(i+1,j+1),p3=xy(i,j+1),pts=[];if(cross(v0,v1))pts.push(interp(p0,p1,v0,v1));if(cross(v1,v2))pts.push(interp(p1,p2,v1,v2));if(cross(v2,v3))pts.push(interp(p2,p3,v2,v3));if(cross(v3,v0))pts.push(interp(p3,p0,v3,v0));if(pts.length===2)out.push([pts[0],pts[1]]);else if(pts.length===4){out.push([pts[0],pts[1]]);out.push([pts[2],pts[3]])}}}return out}
