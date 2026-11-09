@@ -115,21 +115,30 @@ async function loadSeason(){
   const year=Number(document.getElementById('seasonSelect').value);
   const mode=document.getElementById('stationMode').value;
   const target='./data/seasons/'+year+'-'+mode+'.json';
+  const countiesTarget='./data/counties.geojson';
+  const hazardsTarget='./data/hazards/'+year+'.kml';
   b.disabled=true;
   b.textContent='LOADING…';
   setStatus(state.tab==='products'?'products':'frequency','Loading preprocessed county observations and seasonal products from GitHub…');
   try{
-    const response=await fetch(target,{cache:'no-store'});
+    const [response,countiesResponse,hazardsResponse]=await Promise.all([
+      fetch(target,{cache:'no-store'}),
+      fetch(countiesTarget,{cache:'force-cache'}),
+      fetch(hazardsTarget,{cache:'no-store'})
+    ]);
     if(!response.ok){
       if(response.status===404)throw new Error('Season data has not been generated yet. In GitHub, open Actions → Build data + deploy Pages → Run workflow, enter '+year+', then reload this page.');
       throw new Error('Season data HTTP '+response.status);
     }
+    if(!countiesResponse.ok)throw new Error('County map HTTP '+countiesResponse.status+'. Re-run the GitHub data workflow.');
     const data=await response.json();
+    data.countiesGeoJson=await countiesResponse.json();
+    const hazardsKml=hazardsResponse.ok?await hazardsResponse.text():'';
     b.disabled=false;
     b.textContent='LOAD SEASON';
     if(!data||data.buildId!==state.config.buildId)throw new Error('Data build mismatch. Re-run the GitHub data workflow.');
     state.data=data;
-    state.events=parseHazards(data.hazardsKml||'');
+    state.events=parseHazards(hazardsKml);
     state.selectedEvent=null;
     fitMaps();
     renderFrequency();
