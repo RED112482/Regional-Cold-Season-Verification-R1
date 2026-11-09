@@ -459,7 +459,7 @@ def query_end_for_season(season: dict) -> str:
     return min(season["endDate"], yesterday)
 
 
-def build_one_season(start_year: int, mode: str, counties: dict, catalog: dict, all_daily: dict, hazards_kml: str, out_dir: Path):
+def build_one_season(start_year: int, mode: str, counties: dict, catalog: dict, all_daily: dict, out_dir: Path):
     season = season_info(start_year)
     query_end = query_end_for_season(season)
     if query_end < season["startDate"]:
@@ -478,14 +478,14 @@ def build_one_season(start_year: int, mode: str, counties: dict, catalog: dict, 
         "stationMode": mode,
         "stationModeLabel": "ASOS / AWOS only" if mode == "asosawos" else "All IEM METAR sites",
         "dates": dates,
-        "countiesGeoJson": counties,
+        "countiesUrl": "./data/counties.geojson",
+        "hazardsUrl": f"./data/hazards/{start_year}.kml",
         "countyStats": stats,
         "stationCount": len(sites),
         "catalogCounts": {
             "all": len(catalog["allSites"]),
             "asosawos": len(catalog["asosAwosSites"]),
         },
-        "hazardsKml": hazards_kml,
         "warnings": [],
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -522,6 +522,11 @@ def build_seasons(years: list[int], modes: list[str], output_root: Path):
     print("Fetching regional county boundaries…")
     counties = fetch_counties()
     print(f"County features: {len(counties.get('features', []))}")
+    output_root.mkdir(parents=True, exist_ok=True)
+    (output_root / "counties.geojson").write_text(
+        json.dumps(counties, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
 
     print("Fetching regional station catalog…")
     catalog = fetch_station_catalog(counties)
@@ -542,9 +547,12 @@ def build_seasons(years: list[int], modes: list[str], output_root: Path):
         except Exception as exc:
             print(f"Warning: hazard archive failed: {exc}", file=sys.stderr)
             hazards = ""
+        hazards_dir = output_root / "hazards"
+        hazards_dir.mkdir(parents=True, exist_ok=True)
+        (hazards_dir / f"{year}.kml").write_text(hazards, encoding="utf-8")
 
         for mode in modes:
-            build_one_season(year, mode, counties, catalog, all_daily, hazards, seasons_dir)
+            build_one_season(year, mode, counties, catalog, all_daily, seasons_dir)
 
     write_config(output_root)
 
