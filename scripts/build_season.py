@@ -351,7 +351,7 @@ def criteria_for_county(county: dict) -> dict:
         band = "TAE Florida tier" if florida else "TAE Alabama/Georgia tier"
 
     return {
-        "frostProxy": 36,
+        "frostProxy": 37,
         "freeze": 32,
         "hardFreeze": 25,
         "coldAdvisory": advisory,
