@@ -3,7 +3,7 @@
 
 Uses the official NWS NDFD REST/DWML multi-point service for county-center
 minimum-temperature guidance.  The map itself uses the official NDFD WMS
-MinTemp Day 1 / Day 2 raster layers in the browser.
+MinTemp guidance through five overnight periods in the browser.
 """
 from __future__ import annotations
 
@@ -192,7 +192,7 @@ def fetch_apparent(points):
     out = {}
     today = datetime.now(LOCAL_TZ).date()
     begin = datetime.combine(today, dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
-    end = datetime.combine(today + timedelta(days=3), dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+    end = datetime.combine(today + timedelta(days=6), dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
 
     for group in chunks(points, 80):
         list_lat_lon = " ".join(f'{p["lat"]:.5f},{p["lon"]:.5f}' for p in group)
@@ -212,15 +212,17 @@ def fetch_apparent(points):
         for point in group:
             result = nearest_result(point["lat"], point["lon"], parsed)
             if not result:
-                out[point["fips"]] = {"day1Apt": None, "day2Apt": None}
+                out[point["fips"]] = {
+                    f"day{i}Apt": None for i in range(1, 6)
+                }
                 continue
             out[point["fips"]] = {
-                "day1Apt": overnight_min(
-                    result.get("values"), result.get("times"), today
-                ),
-                "day2Apt": overnight_min(
-                    result.get("values"), result.get("times"), today + timedelta(days=1)
-                ),
+                f"day{i}Apt": overnight_min(
+                    result.get("values"),
+                    result.get("times"),
+                    today + timedelta(days=i - 1),
+                )
+                for i in range(1, 6)
             }
     return out
 
@@ -240,7 +242,7 @@ def fetch_ndfd(points):
         params = {
             "listLatLon": list_lat_lon,
             "startDate": today,
-            "numDays": "3",
+            "numDays": "5",
             "Unit": "e",
             "format": "24 hourly",
             "XMLformat": "DWML",
@@ -253,14 +255,18 @@ def fetch_ndfd(points):
         for p in group:
             result = nearest_result(p["lat"], p["lon"], parsed)
             if not result:
-                out[p["fips"]] = {"day1": None, "day2": None, "validTimes": []}
+                out[p["fips"]] = {
+                    **{f"day{i}": None for i in range(1, 6)},
+                    "validTimes": [],
+                }
                 continue
             vals = result.get("values", [])
-            out[p["fips"]] = {
-                "day1": vals[0] if len(vals) > 0 else None,
-                "day2": vals[1] if len(vals) > 1 else None,
-                "validTimes": result.get("validTimes", [])[:2],
+            item = {
+                f"day{i}": vals[i - 1] if len(vals) >= i else None
+                for i in range(1, 6)
             }
+            item["validTimes"] = result.get("validTimes", [])[:5]
+            out[p["fips"]] = item
     return out
 
 
@@ -303,16 +309,19 @@ def build_cwa_grids(counties, nx=17, ny=17):
 
         mint = fetch_ndfd(points)
         apt = fetch_apparent(points)
-        day1 = []
-        day2 = []
-        day1apt = []
-        day2apt = []
+        field_values = {
+            **{f"day{i}": [] for i in range(1, 6)},
+            **{f"day{i}Apt": [] for i in range(1, 6)},
+        }
         for point in points:
             key = point["fips"]
-            day1.append((mint.get(key) or {}).get("day1"))
-            day2.append((mint.get(key) or {}).get("day2"))
-            day1apt.append((apt.get(key) or {}).get("day1Apt"))
-            day2apt.append((apt.get(key) or {}).get("day2Apt"))
+            for i in range(1, 6):
+                field_values[f"day{i}"].append(
+                    (mint.get(key) or {}).get(f"day{i}")
+                )
+                field_values[f"day{i}Apt"].append(
+                    (apt.get(key) or {}).get(f"day{i}Apt")
+                )
 
         fields[wfo] = {
             "nx": nx,
@@ -321,29 +330,28 @@ def build_cwa_grids(counties, nx=17, ny=17):
             "xmax": xmax,
             "ymin": ymin,
             "ymax": ymax,
-            "day1": day1,
-            "day2": day2,
-            "day1Apt": day1apt,
-            "day2Apt": day2apt,
+            **field_values,
             "source": "NOAA/NWS NDFD point-sampled field",
         }
     return fields
 
 
 def forecast_periods():
+    """Five overnight periods, rolling strictly at local midnight."""
     today = datetime.now(LOCAL_TZ).date()
-    return {
-        "day1": {
-            "name": "Tonight",
-            "startDate": today.isoformat(),
-            "endDate": (today + timedelta(days=1)).isoformat(),
-        },
-        "day2": {
-            "name": "Tomorrow Night",
-            "startDate": (today + timedelta(days=1)).isoformat(),
-            "endDate": (today + timedelta(days=2)).isoformat(),
-        },
-    }
+    periods = {}
+    for i in range(1, 6):
+        start = today + timedelta(days=i - 1)
+        end = start + timedelta(days=1)
+        periods[f"day{i}"] = {
+            "name": "Tonight" if i == 1 else (
+                "Tomorrow Night" if i == 2 else f"Night {i}"
+            ),
+            "nightNumber": i,
+            "startDate": start.isoformat(),
+            "endDate": end.isoformat(),
+        }
+    return periods
 
 
 def main():
@@ -381,10 +389,11 @@ def main():
 
     payload = {
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generatedLocalDate": datetime.now(LOCAL_TZ).date().isoformat(),
         "periods": forecast_periods(),
         "source": "NOAA/NWS NDFD minimum temperature + hourly apparent temperature",
         "wms": "https://mapservices.weather.noaa.gov/raster/services/NDFD/NDFD_temp/MapServer/WMSServer",
-        "wmsLayers": {"day1": "140", "day2": "144"},
+        "forecastNights": 5,
         "method": "Official NDFD MinT raster display. Derived MinApT is the minimum of official hourly NDFD Apparent Temperature from 6 PM through 6 AM local time. County values and light contour fields are sampled directly from NOAA/NWS NDFD.",
         "counties": county_rows,
         "fields": fields,
