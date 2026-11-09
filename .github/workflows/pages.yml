@@ -6,6 +6,7 @@ on:
     paths:
       - "site/index.html"
       - "site/.nojekyll"
+      - "site/data/forecast.json"
       - "scripts/**"
       - ".github/workflows/pages.yml"
       - "README.md"
@@ -36,7 +37,7 @@ permissions:
 
 concurrency:
   group: "github-pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-data:
@@ -53,6 +54,7 @@ jobs:
           python-version: "3.12"
 
       - name: Build static cold-season data
+        if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Refresh NDFD forecast guidance') }}
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -74,6 +76,7 @@ jobs:
           fi
 
       - name: Save generated datasets to the repository
+        if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Refresh NDFD forecast guidance') }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
