@@ -12,7 +12,7 @@ import math
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import date, datetime, time as dtime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -24,6 +24,7 @@ WFO_IDS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 LOCAL_TZ = ZoneInfo("America/Chicago")
 USER_AGENT = "Regional-Cold-Season-Verification/forecast (+https://github.com/RED112482/Regional-Cold-Season-Verification-R1)"
 NDFD_URL = "https://digital.weather.gov/xml/sample_products/browser_interface/ndfdBrowserClientByDay.php"
+NDFD_TS_URL = "https://digital.weather.gov/xml/sample_products/browser_interface/ndfdXMLclient.php"
 
 
 def get_text(url: str, timeout: int = 90) -> str:
@@ -98,7 +99,7 @@ def parse_dwml(xml_text: str):
         for temp in list(params):
             if strip_ns(temp.tag) != "temperature" or str(temp.attrib.get("type", "")).lower() != "minimum":
                 continue
-            layout_key = child_text(temp, "time-layout")
+            layout_key = temp.attrib.get("time-layout") or child_text(temp, "time-layout")
             vals = []
             for ch in list(temp):
                 if strip_ns(ch.tag) == "value":
@@ -107,6 +108,121 @@ def parse_dwml(xml_text: str):
             locations[loc_key]["validTimes"] = time_layouts.get(layout_key, [])[:len(vals)]
             break
     return list(locations.values())
+
+
+
+def parse_apparent_dwml(xml_text: str):
+    """Parse NDFD unsummarized apparent-temperature DWML."""
+    root = ET.fromstring(xml_text)
+    locations = {}
+    layouts = {}
+
+    for node in root.iter():
+        if strip_ns(node.tag) == "time-layout":
+            key = child_text(node, "layout-key")
+            starts = []
+            for ch in list(node):
+                if strip_ns(ch.tag) == "start-valid-time" and ch.text:
+                    starts.append(ch.text.strip())
+            if key:
+                layouts[key] = starts
+
+    for node in root.iter():
+        if strip_ns(node.tag) != "location":
+            continue
+        key = child_text(node, "location-key")
+        point = first_child(node, "point")
+        if not key or point is None:
+            continue
+        locations[key] = {
+            "lat": fnum(point.attrib.get("latitude")),
+            "lon": fnum(point.attrib.get("longitude")),
+            "values": [],
+            "times": [],
+        }
+
+    for params in root.iter():
+        if strip_ns(params.tag) != "parameters":
+            continue
+        loc_key = params.attrib.get("applicable-location", "")
+        if loc_key not in locations:
+            continue
+        for temp in list(params):
+            if strip_ns(temp.tag) != "temperature":
+                continue
+            ttype = str(temp.attrib.get("type", "")).lower()
+            name = child_text(temp, "name").lower()
+            if ttype != "apparent" and "apparent" not in name:
+                continue
+            layout_key = temp.attrib.get("time-layout") or child_text(temp, "time-layout")
+            vals = [
+                fnum(ch.text)
+                for ch in list(temp)
+                if strip_ns(ch.tag) == "value"
+            ]
+            locations[loc_key]["values"] = vals
+            locations[loc_key]["times"] = layouts.get(layout_key, [])[: len(vals)]
+            break
+
+    return list(locations.values())
+
+
+def overnight_min(values, times, start_day: date):
+    """Return min apparent temperature from local 6 PM through 6 AM."""
+    candidates = []
+    next_day = start_day + timedelta(days=1)
+    for value, ts in zip(values or [], times or []):
+        if value is None or not ts:
+            continue
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        local_day = dt.date()
+        hour = dt.hour
+        if (local_day == start_day and hour >= 18) or (
+            local_day == next_day and hour <= 6
+        ):
+            candidates.append(value)
+    return min(candidates) if candidates else None
+
+
+def fetch_apparent(points):
+    """Fetch hourly NDFD apparent temperature and derive overnight minima."""
+    out = {}
+    today = datetime.now(LOCAL_TZ).date()
+    begin = datetime.combine(today, dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+    end = datetime.combine(today + timedelta(days=3), dtime(12, 0), tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+
+    for group in chunks(points, 80):
+        list_lat_lon = " ".join(f'{p["lat"]:.5f},{p["lon"]:.5f}' for p in group)
+        params = {
+            "listLatLon": list_lat_lon,
+            "product": "time-series",
+            "begin": begin.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "Unit": "e",
+            "appt": "appt",
+            "XMLformat": "DWML",
+        }
+        url = NDFD_TS_URL + "?" + urllib.parse.urlencode(params)
+        parsed = parse_apparent_dwml(get_text(url, timeout=120))
+        if not parsed:
+            raise RuntimeError("NDFD returned no apparent-temperature time series")
+        for point in group:
+            result = nearest_result(point["lat"], point["lon"], parsed)
+            if not result:
+                out[point["fips"]] = {"day1Apt": None, "day2Apt": None}
+                continue
+            out[point["fips"]] = {
+                "day1Apt": overnight_min(
+                    result.get("values"), result.get("times"), today
+                ),
+                "day2Apt": overnight_min(
+                    result.get("values"), result.get("times"), today + timedelta(days=1)
+                ),
+            }
+    return out
 
 
 def nearest_result(lat, lon, parsed):
@@ -173,16 +289,18 @@ def main():
         }
 
     ndfd = fetch_ndfd(points)
+    apparent = fetch_apparent(points)
     for fips, vals in ndfd.items():
         if fips in county_rows:
             county_rows[fips].update(vals)
+            county_rows[fips].update(apparent.get(fips, {}))
 
     payload = {
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "NOAA/NWS NDFD minimum temperature",
+        "source": "NOAA/NWS NDFD minimum temperature + apparent temperature",
         "wms": "https://mapservices.weather.noaa.gov/raster/services/NDFD/NDFD_temp/MapServer/WMSServer",
         "wmsLayers": {"day1": "140", "day2": "144"},
-        "method": "Official NDFD raster display; county guidance values sampled at NOAA/NWS county representative points.",
+        "method": "Official NDFD MinT raster display; county MinT and overnight MinApT guidance sampled at NOAA/NWS county representative points. MinApT is the minimum hourly NDFD apparent temperature from 6 PM through 6 AM local time.",
         "counties": county_rows,
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
