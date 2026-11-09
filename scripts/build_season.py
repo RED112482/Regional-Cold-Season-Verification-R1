@@ -24,7 +24,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 APP_TITLE = "Regional Cold Season Verification"
-BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R2"
+BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R3-SIMPLIFIED"
 DATA_MODE = "COLD_SEASON_COUNTY_VERIFICATION"
 LOCAL_TZ = ZoneInfo("America/Chicago")
 IEM_BASE = "https://mesonet.agron.iastate.edu"
@@ -455,8 +455,10 @@ def fetch_hazards_kml(start_date: str, end_date: str) -> str:
 
 
 def query_end_for_season(season: dict) -> str:
-    yesterday = (datetime.now(LOCAL_TZ).date() - timedelta(days=1)).isoformat()
-    return min(season["endDate"], yesterday)
+    # Include the current local day so overnight frost/freeze/cold products can
+    # verify as soon as the morning observations are available.
+    today = datetime.now(LOCAL_TZ).date().isoformat()
+    return min(season["endDate"], today)
 
 
 def build_one_season(start_year: int, mode: str, counties: dict, catalog: dict, all_daily: dict, out_dir: Path):
