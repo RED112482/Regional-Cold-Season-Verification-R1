@@ -2,6 +2,8 @@ name: Refresh NDFD forecast guidance
 
 on:
   schedule:
+    - cron: "2 0 * * *"
+      timezone: "America/Chicago"
     - cron: "17,47 * * * *"
       timezone: "America/Chicago"
   workflow_dispatch:
