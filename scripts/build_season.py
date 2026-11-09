@@ -24,7 +24,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 APP_TITLE = "Regional Cold Season Verification"
-BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R3-SIMPLIFIED"
+BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R4-LIVE-VTEC-TIMELINE"
 DATA_MODE = "COLD_SEASON_COUNTY_VERIFICATION"
 LOCAL_TZ = ZoneInfo("America/Chicago")
 IEM_BASE = "https://mesonet.agron.iastate.edu"
@@ -533,6 +533,40 @@ def build_seasons(years: list[int], modes: list[str], output_root: Path):
     print("Fetching regional station catalog…")
     catalog = fetch_station_catalog(counties)
     print(f"Stations: {len(catalog['allSites'])} all / {len(catalog['asosAwosSites'])} ASOS-AWOS")
+
+    # Reusable point catalog for browser-side VTEC verification.  Attach the
+    # same county/local cold criteria used by the seasonal counter so selected
+    # events can be verified at individual observation points.
+    county_meta = {}
+    for feature in counties.get("features", []):
+        p = feature.get("properties") or {}
+        fips = str(p.get("fips") or "").zfill(5)
+        try:
+            clat = float(p.get("lat"))
+            clon = float(p.get("lon"))
+        except Exception:
+            clat = clon = None
+        county_meta[fips] = {
+            "cwa": str(p.get("cwa") or "").upper(),
+            "state": str(p.get("state") or "").upper(),
+            "countyname": str(p.get("countyname") or ""),
+            "lat": clat,
+            "lon": clon,
+        }
+
+    station_payload = {"buildId": BUILD_ID, "allSites": [], "asosAwosSites": []}
+    for key in ("allSites", "asosAwosSites"):
+        rows = []
+        for site in catalog[key]:
+            item = dict(site)
+            meta = county_meta.get(site.get("countyFips") or "")
+            item["criteria"] = criteria_for_county(meta) if meta else {}
+            rows.append(item)
+        station_payload[key] = rows
+    (output_root / "stations.json").write_text(
+        json.dumps(station_payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
 
     seasons_dir = output_root / "seasons"
     for year in years:
