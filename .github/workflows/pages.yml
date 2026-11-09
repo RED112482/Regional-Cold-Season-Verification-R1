@@ -4,12 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - "site/**"
+      - "site/index.html"
+      - "site/.nojekyll"
       - "scripts/**"
       - ".github/workflows/pages.yml"
       - "README.md"
   schedule:
-    - cron: "17 4 * * *"
+    - cron: "30 10 * * *"
       timezone: "America/Chicago"
   workflow_dispatch:
     inputs:
