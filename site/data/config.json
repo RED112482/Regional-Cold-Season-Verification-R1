@@ -1,6 +1,6 @@
 {
   "appTitle": "Regional Cold Season Verification",
-  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R7-MINAPT-TOGGLES",
+  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R8-FIELDS-CONTOURS",
   "dataMode": "COLD_SEASON_COUNTY_VERIFICATION",
   "wfos": [
     "MOB",
@@ -109,5 +109,5 @@
   "thresholdMax": 40,
   "thresholdDefault": 32,
   "defaultStationMode": "all",
-  "sourceNote": "Static GitHub Pages viewer. GitHub Actions preprocesses IEM computed daily summaries + IEM VTEC archive + NOAA/NWS county reference boundaries. County fills are observation-based screening, not official gridded verification."
+  "sourceNote": "GitHub Pages viewer with live VTEC events, METAR primary verification, COOP/RWIS/USCRN supplements, cold-frequency count/recency maps, and official NDFD MinT plus derived overnight MinApT field guidance."
 }
