@@ -1,6 +1,1 @@
-.clasp.json
-node_modules/
-.DS_Store
-*.log
-.vscode/
-.idea/
+.DS_Store\n*.log\n.vscode/\n.idea/\n__pycache__/\n*.pyc\n
