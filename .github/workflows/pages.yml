@@ -89,9 +89,19 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
 
+          # The NDFD forecast has its own ~30 minute refresh workflow. Preserve
+          # whichever forecast file is newest on main while replacing the
+          # heavier seasonal-history files.
+          if [ -f site/data/forecast.json ]; then
+            cp site/data/forecast.json /tmp/latest-forecast.json
+          fi
+
           rm -rf site/data
           mkdir -p site/data
           cp -a /tmp/cold-season-data/. site/data/
+          if [ -f /tmp/latest-forecast.json ]; then
+            cp /tmp/latest-forecast.json site/data/forecast.json
+          fi
           git add site/data
 
           if git diff --cached --quiet; then
