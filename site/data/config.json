@@ -109,5 +109,5 @@
   "thresholdMax": 40,
   "thresholdDefault": 32,
   "defaultStationMode": "all",
-  "sourceNote": "GitHub Pages viewer. GitHub Actions preprocesses IEM daily observations, IEM VTEC cold products, and NOAA/NWS county boundaries. County fills are observational screening, not official NWS verification."
+  "sourceNote": "Static GitHub Pages viewer. GitHub Actions preprocesses IEM computed daily summaries + IEM VTEC archive + NOAA/NWS county reference boundaries. County fills are observation-based screening, not official gridded verification."
 }
