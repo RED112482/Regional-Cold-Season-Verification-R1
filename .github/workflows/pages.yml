@@ -70,13 +70,26 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Keep the freshly generated data, then move the working tree to the
+          # newest main branch before committing. This avoids conflicts when
+          # two workflow runs overlap.
+          rm -rf /tmp/cold-season-data
+          mkdir -p /tmp/cold-season-data
+          cp -a site/data/. /tmp/cold-season-data/
+
+          git fetch origin main
+          git reset --hard origin/main
+
+          rm -rf site/data
+          mkdir -p site/data
+          cp -a /tmp/cold-season-data/. site/data/
           git add site/data
+
           if git diff --cached --quiet; then
             echo "No generated-data changes to commit."
           else
             git commit -m "Update generated cold-season data"
-            git fetch origin main
-            git rebase origin/main
             git push origin HEAD:main
           fi
 
