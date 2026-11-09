@@ -1,89 +1,96 @@
 # Regional Cold Season Verification
 
-A dark-mode, Poppins-based Google Apps Script web viewer for cold-season climatology and NWS frost/freeze/cold-product verification across **MOB, LIX, JAN, BMX, and TAE**.
+A **GitHub-only** cold-season climatology and verification viewer for **MOB, LIX, JAN, BMX, and TAE**.
 
-## What the viewer does
+The live app uses:
+
+- **GitHub Pages** for the HTML/CSS/JavaScript viewer.
+- **GitHub Actions** for all NOAA/IEM data fetching and preprocessing.
+- Static JSON files under `site/data/` for fast browser loading.
+
+There is **no Google Apps Script backend, no npm requirement, and no local command-line setup required**.
+
+## Viewer
+
+The viewer is designed around three tabs:
 
 ### Freeze Frequency
-- Uses a September–May cold season.
-- Color-fills counties by the number of days a selected cold threshold was reached.
-- Custom temperature threshold slider from **-20°F to 40°F**.
-- Presets for frost screening, freeze, hard freeze, local Cold Weather Advisory criteria, and local Extreme Cold criteria.
-- Supports **All IEM METAR sites** or **ASOS/AWOS only**.
-- Counties without an observation site use the nearest regional station and are explicitly treated as fallback/estimated coverage.
+- September–May cold seasons.
+- County-filled counts for days meeting a selected threshold.
+- Custom slider from **-20°F to 40°F**.
+- Frost, Freeze, Hard Freeze, local Cold Weather Advisory, and local Extreme Cold presets.
+- All IEM METAR or ASOS/AWOS-only observation sets.
+- Counties without a site use the nearest regional station and are marked as estimated/fallback coverage.
 
 ### Season Products
-- Loads archived cold-season NWS products from the IEM VTEC archive.
-- Includes Frost Advisory, Freeze Watch/Warning, Cold Weather Advisory, Extreme Cold Watch/Warning, plus legacy Wind Chill/Hard Freeze products for older seasons.
-- Lets you select a season event and screen affected counties against observed criteria.
-- Green/red county verification is an observational screening analysis, not official NWS verification.
+- Archived Frost Advisory, Freeze Watch/Warning, Cold Weather Advisory, Extreme Cold Watch/Warning.
+- Legacy Wind Chill and Hard Freeze products are retained for older seasons.
+- Click an event to compare affected counties against observed criteria.
+- Verification colors are an observational screening tool, not official NWS verification.
 
 ### Criteria / Methods
-- Documents the county/station methodology and the local threshold logic used by the viewer.
+- Documents the local thresholds and the county/station methodology.
 
-## Repository structure
+## Repository layout
 
 ```text
 Regional-Cold-Season-Verification-R1/
-├── src/
-│   ├── Code.gs
-│   ├── Index.html
-│   └── appsscript.json
-├── .clasp.json.example
-├── .gitignore
+├── .github/
+│   └── workflows/
+│       └── pages.yml
+├── scripts/
+│   └── build_season.py
+├── site/
+│   ├── index.html
+│   ├── .nojekyll
+│   └── data/
+│       ├── config.json
+│       └── seasons/
 └── README.md
 ```
 
-## Recommended workflow
+## One-time GitHub Pages setup
 
-GitHub is the source-control home for the project, while **Google Apps Script remains the runtime/backend**. This preserves UrlFetchApp, server-side caching, IEM/NOAA requests, and the deployed web-app URL.
+In the repository:
 
-### First-time setup
+1. Open **Settings**.
+2. Select **Pages**.
+3. Under **Build and deployment → Source**, choose **GitHub Actions**.
+4. Open the **Actions** tab.
+5. Choose **Build data + deploy Pages**.
+6. Click **Run workflow**.
+7. Leave `season = current` and `mode = both`, then run it.
 
-1. Install Google's Apps Script CLI:
-   ```bash
-   npm install -g @google/clasp
-   ```
-2. Log in:
-   ```bash
-   clasp login
-   ```
-3. Create a standalone Apps Script project in your Google account.
-4. Copy its **Script ID** from Apps Script → Project Settings.
-5. Copy the example config:
-   ```bash
-   cp .clasp.json.example .clasp.json
-   ```
-6. Replace `PASTE_YOUR_APPS_SCRIPT_ID_HERE` with the Script ID.
-7. Push the GitHub source into Apps Script:
-   ```bash
-   clasp push
-   ```
-8. In Apps Script, run:
-   - `coldSeasonR1_getBuildInfo`
-   - `coldSeasonR1_authorizeAndTest`
-9. Deploy as **Web app**, executing as you, with the appropriate access setting for your office/site.
-10. Use the deployed URL ending in `/exec`.
+After the workflow finishes, the project page will be:
 
-## Day-to-day development
+`https://red112482.github.io/Regional-Cold-Season-Verification-R1/`
 
-```bash
-git pull
-# edit files under src/
-git add .
-git commit -m "Describe the change"
-git push
-clasp push
-```
+## Historical seasons
 
-After code changes, update the Apps Script web-app deployment to a **new version** before testing the production `/exec` URL.
+You do not need a command prompt.
+
+From **Actions → Build data + deploy Pages → Run workflow**:
+
+- Enter `2025` to build the 2025–26 season.
+- Enter `2024` to build the 2024–25 season.
+- Enter `all` to build every available season from 2005 through the current season.
+- Keep mode at `both` to build both station datasets.
+
+The generated JSON is committed back into `site/data/seasons/`, so once a historical season is built it remains available to the viewer.
+
+## Automatic updates
+
+The workflow automatically refreshes the **current season every day at 4:17 AM America/Chicago**. It also rebuilds/deploys on relevant pushes to `main`.
+
+The data builder deliberately makes IEM daily-summary requests sequentially and pauses between requests to respect IEM's documented per-IP throttle.
 
 ## Data sources
 
-- Iowa Environmental Mesonet station metadata and computed daily summaries
+- Iowa Environmental Mesonet computed daily summaries
 - Iowa Environmental Mesonet VTEC archive
-- NOAA/NWS county and CWA reference boundaries
+- NOAA/NWS county reference boundaries
+- CARTO / OpenStreetMap basemap tiles
 
 ## Build
 
-Current build: **REGIONAL-COLD-SEASON-R1**
+Current viewer build: **REGIONAL-COLD-SEASON-GITHUB-R2**
