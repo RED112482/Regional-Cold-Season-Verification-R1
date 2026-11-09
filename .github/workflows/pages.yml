@@ -74,7 +74,9 @@ jobs:
             echo "No generated-data changes to commit."
           else
             git commit -m "Update generated cold-season data"
-            git push
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main
           fi
 
       - name: Configure GitHub Pages
