@@ -1,6 +1,6 @@
 {
   "appTitle": "Regional Cold Season Verification",
-  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R9-FILLED-FIELDS",
+  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R10-FIVE-NIGHTS",
   "dataMode": "COLD_SEASON_COUNTY_VERIFICATION",
   "wfos": [
     "MOB",
@@ -109,5 +109,5 @@
   "thresholdMax": 40,
   "thresholdDefault": 32,
   "defaultStationMode": "all",
-  "sourceNote": "Static GitHub Pages viewer. GitHub Actions preprocesses IEM computed daily summaries + IEM VTEC archive + NOAA/NWS county reference boundaries. County fills are observation-based screening, not official gridded verification."
+  "sourceNote": "GitHub Pages viewer with five rolling overnight NDFD forecast periods, midnight rollover, filled MinT / derived MinApT fields, live VTEC verification, and supplemental COOP/RWIS/USCRN point data."
 }
