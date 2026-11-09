@@ -302,7 +302,7 @@ def fetch_daily_summaries(all_sites: list[dict], start_date: str, end_date: str)
         reader = csv.DictReader(io.StringIO(text))
         for row in reader:
             station = str(row.get("station") or row.get("id") or "").strip().upper()
-            d = str(row.get("date") or "").strip()[:10]
+            d = str(row.get("day") or row.get("date") or "").strip()[:10]
             if station not in output or not d:
                 continue
             output[station][d] = {
