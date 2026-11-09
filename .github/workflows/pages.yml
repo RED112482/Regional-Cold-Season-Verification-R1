@@ -1,0 +1,97 @@
+name: Build data + deploy Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "scripts/**"
+      - ".github/workflows/pages.yml"
+      - "README.md"
+  schedule:
+    - cron: "17 4 * * *"
+      timezone: "America/Chicago"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season start year, current, or all"
+        required: true
+        default: "current"
+        type: string
+      mode:
+        description: "Observation dataset(s)"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - all
+          - asosawos
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "github-pages"
+  cancel-in-progress: false
+
+jobs:
+  build-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build static cold-season data
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SEASON="${{ inputs.season }}"
+            MODE="${{ inputs.mode }}"
+          else
+            SEASON="current"
+            MODE="both"
+          fi
+          echo "Building season: $SEASON; mode: $MODE"
+          python scripts/build_season.py --season "$SEASON" --mode "$MODE"
+
+      - name: Save generated datasets to the repository
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data
+          if git diff --cached --quiet; then
+            echo "No generated-data changes to commit."
+          else
+            git commit -m "Update generated cold-season data"
+            git push
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-data
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
