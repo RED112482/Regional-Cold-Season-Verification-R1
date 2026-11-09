@@ -24,7 +24,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 APP_TITLE = "Regional Cold Season Verification"
-BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R8-FIELDS-CONTOURS"
+BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R9-FILLED-FIELDS"
 DATA_MODE = "COLD_SEASON_COUNTY_VERIFICATION"
 LOCAL_TZ = ZoneInfo("America/Chicago")
 IEM_BASE = "https://mesonet.agron.iastate.edu"
