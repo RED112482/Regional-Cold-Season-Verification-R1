@@ -109,5 +109,5 @@
   "thresholdMax": 40,
   "thresholdDefault": 32,
   "defaultStationMode": "all",
-  "sourceNote": "GitHub Pages viewer with live IEM VTEC event lifecycles, exact-window METAR point verification, supplemental observations, and NOAA/NWS NDFD overnight product guidance."
+  "sourceNote": "Static GitHub Pages viewer. GitHub Actions preprocesses IEM computed daily summaries + IEM VTEC archive + NOAA/NWS county reference boundaries. County fills are observation-based screening, not official gridded verification."
 }
