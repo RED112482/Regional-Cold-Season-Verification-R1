@@ -1,6 +1,6 @@
 {
   "appTitle": "Regional Cold Season Verification",
-  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R3-SIMPLIFIED",
+  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R4-LIVE-VTEC-TIMELINE",
   "dataMode": "COLD_SEASON_COUNTY_VERIFICATION",
   "wfos": [
     "MOB",
@@ -109,5 +109,5 @@
   "thresholdMax": 40,
   "thresholdDefault": 32,
   "defaultStationMode": "all",
-  "sourceNote": "Static GitHub Pages viewer. GitHub Actions preprocesses IEM computed daily summaries + IEM VTEC archive + NOAA/NWS county reference boundaries. County fills are observation-based screening, not official gridded verification."
+  "sourceNote": "GitHub Pages viewer with live IEM VTEC event lifecycles and exact-window point verification. GitHub Actions maintains the heavier Sep-May daily observation history."
 }
