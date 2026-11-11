@@ -1,4 +1,4 @@
-# Regional Cold Season Verification
+# NWS Cold Season Verification and Forecast Tool
 
 A **GitHub-only** cold-season climatology and verification viewer for **MOB, LIX, JAN, BMX, and TAE**.
 
@@ -12,7 +12,7 @@ There is **no Google Apps Script backend, no npm requirement, and no local comma
 
 ## Viewer
 
-The viewer is designed around three tabs:
+The viewer is designed around four tabs:
 
 ### Freeze Frequency
 - September–May cold seasons.
@@ -34,6 +34,11 @@ The viewer is designed around three tabs:
 - Official NDFD raster plus county representative-point lows.
 - Screens local Frost/Freeze and Cold Weather Advisory/Extreme Cold thresholds.
 - Guidance only; growing-season status, duration, wind/sky and forecaster judgment still matter.
+
+### PoT Frost Visualizer
+- Derived NDFD overnight frost-potential field using temperature, dewpoint depression, wind and sky cover.
+- Patchy / Areas / Widespread guidance categories use a UK-style weighted screening method.
+- County product screening uses approximately 50% areal coverage from raw NDFD field samples; display smoothing is not used for qualification.
 
 ### Supplemental verification
 - Exact-window ASOS/AWOS/METAR remains the primary point-verification score.
@@ -105,4 +110,4 @@ The data builder deliberately makes IEM daily-summary requests sequentially and 
 
 ## Build
 
-Current viewer build: **REGIONAL-COLD-SEASON-GITHUB-R5-NDFD-FORECAST**
+Current viewer build: **REGIONAL-COLD-SEASON-GITHUB-R11-FROST-COVERAGE**
