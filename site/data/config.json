@@ -1,6 +1,6 @@
 {
   "appTitle": "NWS Cold Season Verification and Forecast Tool",
-  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R12-ZONES",
+  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R11-FROST-COVERAGE",
   "dataMode": "COLD_SEASON_COUNTY_VERIFICATION",
   "wfos": [
     "MOB",
