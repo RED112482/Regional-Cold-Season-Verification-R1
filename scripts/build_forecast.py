@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build current NDFD overnight-minimum guidance for the GitHub Pages viewer.
+"""Build current NDFD overnight-minimum guidance for the GitHub Pages viewer.\n\nIncludes official NWS Public Forecast Zone geometry for zone-level screening.
 
 Uses the official NWS NDFD REST/DWML multi-point service for county-center
 minimum-temperature guidance.  The map itself uses the official NDFD WMS
