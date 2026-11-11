@@ -23,8 +23,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-APP_TITLE = "Regional Cold Season Verification"
-BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R10-FIVE-NIGHTS"
+APP_TITLE = "NWS Cold Season Verification and Forecast Tool"
+BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R11-FROST-COVERAGE"
 DATA_MODE = "COLD_SEASON_COUNTY_VERIFICATION"
 LOCAL_TZ = ZoneInfo("America/Chicago")
 IEM_BASE = "https://mesonet.agron.iastate.edu"
