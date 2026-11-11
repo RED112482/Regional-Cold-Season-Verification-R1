@@ -531,7 +531,7 @@ function updateForecastTempLegend(){
   d.innerHTML='<div class="temp-legend-title">'+name+'</div><div class="temp-gradient"></div><div class="temp-gradient-labels"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span><span>120°F</span></div>';
 }
 function forecastAreaRows(cwa){const zones=Object.values((state.forecastData&&state.forecastData.zones)||{}).filter(r=>r.wfo===cwa);if(zones.length)return zones;return Object.values((state.forecastData&&state.forecastData.counties)||{}).filter(r=>r.wfo===cwa)}
-function forecastAreaGeo(){return state.forecastZonesGeoJson||(state.data&&state.data.countiesGeoJson?state.data.countiesGeoJson:null)}
+function forecastAreaGeo(){return(state.forecastData&&state.forecastData.zonesGeoJson)||state.forecastZonesGeoJson||(state.data&&state.data.countiesGeoJson?state.data.countiesGeoJson:null)}
 function forecastFeatureId(f){const p=(f&&f.properties)||{};return String(p.state_zone||p.STATE_ZONE||p.fips||p.FIPS||'').toUpperCase().padStart(p.state_zone||p.STATE_ZONE?5:5,'0')}
 function forecastRowId(r){return String(r.zoneId||r.fips||'').toUpperCase()}
 function forecastAreaLabel(r){return r.zoneId?(r.zoneId+' · '+r.name):(r.county+', '+r.state)}
