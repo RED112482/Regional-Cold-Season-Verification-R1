@@ -239,6 +239,11 @@ def frost_score_for_night(result, start_day: date):
     wind = _nearest_series_value(series.get("wind"), tmin_ts)
     sky = _nearest_series_value(series.get("sky"), tmin_ts)
 
+    # Temperature is the gate. Favorable moisture/wind/sky cannot create
+    # a frost signal by themselves when the overnight air mass is too warm.
+    if tmin > 40:
+        return 0.0
+
     score = 0.0
     if tmin <= 32:
         score += 45
@@ -246,8 +251,8 @@ def frost_score_for_night(result, start_day: date):
         score += 40
     elif tmin <= 37:
         score += 32
-    elif tmin <= 40:
-        score += 18
+    else:
+        score += 8
 
     dep = None if dew is None else max(0.0, tmin - dew)
     if dep is not None:
@@ -259,6 +264,10 @@ def frost_score_for_night(result, start_day: date):
     if sky is not None:
         score += 10 if sky <= 20 else 8 if sky <= 40 else 4 if sky <= 60 else 0
 
+    # Above 37F, retain only a sub-threshold marginal signal. The map's
+    # first actionable category begins at 20.
+    if tmin > 37:
+        score = min(score, 19.0)
     return round(max(0.0, min(100.0, score)), 1)
 def overnight_min(values, times, start_day: date):
     """Return an overnight minimum from local 6 PM through 6 AM."""
