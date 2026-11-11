@@ -20,6 +20,8 @@ SITE = Path("site")
 DATA = SITE / "data"
 COUNTIES = DATA / "counties.geojson"
 OUTPUT = DATA / "forecast.json"
+ZONES_OUTPUT = DATA / "zones.geojson"
+PUBLIC_ZONES_URL = "https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/FeatureServer/8/query"
 WFO_IDS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 LOCAL_TZ = ZoneInfo("America/Chicago")
 USER_AGENT = "Regional-Cold-Season-Verification/forecast (+https://github.com/RED112482/Regional-Cold-Season-Verification-R1)"
@@ -31,6 +33,32 @@ def get_text(url: str, timeout: int = 90) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml,*/*"})
     with urllib.request.urlopen(req, timeout=timeout) as response:
         return response.read().decode("utf-8", errors="replace")
+
+
+
+def get_json(url: str, timeout: int = 90):
+    return json.loads(get_text(url, timeout=timeout))
+
+
+def fetch_public_zones():
+    """Fetch current official NWS Public Forecast Zones for the supported WFOs."""
+    where = "cwa IN (" + ",".join(f"'{w}'" for w in WFO_IDS) + ")"
+    params = {
+        "where": where,
+        "outFields": "state,cwa,zone,name,state_zone,lon,lat,shortname",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "geojson",
+    }
+    url = PUBLIC_ZONES_URL + "?" + urllib.parse.urlencode(params)
+    payload = get_json(url, timeout=120)
+    features = payload.get("features") or []
+    # Normalize field casing for browser-side use.
+    for feat in features:
+        p = feat.get("properties") or {}
+        norm = {str(k).lower(): v for k, v in p.items()}
+        feat["properties"] = norm
+    return {"type": "FeatureCollection", "features": features}
 
 
 def chunks(items, size):
@@ -604,6 +632,85 @@ def attach_county_areal_stats(counties, county_rows, fields):
             }
 
 
+
+def attach_zone_areal_stats(zones, fields):
+    """Attach raw-NDFD areal coverage statistics to each official NWS zone."""
+    zone_rows = {}
+    for feat in zones.get("features", []):
+        p = feat.get("properties") or {}
+        wfo = str(p.get("cwa") or "").upper()
+        if wfo not in WFO_IDS:
+            continue
+        key = str(p.get("state_zone") or "").upper()
+        field = fields.get(wfo)
+        if not key or not field:
+            continue
+
+        row = {
+            "zoneId": key,
+            "zone": str(p.get("zone") or "").zfill(3),
+            "name": str(p.get("name") or p.get("shortname") or key),
+            "state": str(p.get("state") or "").upper(),
+            "wfo": wfo,
+            "lat": fnum(p.get("lat")),
+            "lon": fnum(p.get("lon")),
+        }
+        coords = list(walk_coords((feat.get("geometry") or {}).get("coordinates") or []))
+        if not coords:
+            continue
+        xmin = min(x for x, _ in coords); xmax = max(x for x, _ in coords)
+        ymin = min(y for _, y in coords); ymax = max(y for _, y in coords)
+        sample_cells = []
+        n = 16
+        for jy in range(n):
+            lat = ymin + (jy + 0.5) * (ymax - ymin) / n
+            for ix in range(n):
+                lon = xmin + (ix + 0.5) * (xmax - xmin) / n
+                if _geometry_contains(feat.get("geometry") or {}, lon, lat):
+                    gx = round((lon - field["xmin"]) / ((field["xmax"] - field["xmin"]) or 1) * (field["nx"] - 1))
+                    gy = round((field["ymax"] - lat) / ((field["ymax"] - field["ymin"]) or 1) * (field["ny"] - 1))
+                    gx = max(0, min(field["nx"] - 1, gx))
+                    gy = max(0, min(field["ny"] - 1, gy))
+                    sample_cells.append(gy * field["nx"] + gx)
+        if not sample_cells:
+            continue
+
+        adv, ext = local_cold_thresholds({
+            "wfo": row["wfo"],
+            "state": row["state"],
+            "lat": row["lat"],
+            "county": row["name"],
+        })
+
+        for i in range(1, 7):
+            tfield = field.get(f"day{i}") or []
+            afield = field.get(f"day{i}Apt") or []
+            ffield = field.get(f"day{i}Frost") or []
+            tvals = [tfield[idx] for idx in sample_cells if idx < len(tfield)]
+            avals = [afield[idx] for idx in sample_cells if idx < len(afield)]
+            fvals = [ffield[idx] for idx in sample_cells if idx < len(ffield)]
+            coldvals = [
+                min(t, a) if t is not None and a is not None else t if t is not None else a
+                for t, a in zip(tvals, avals)
+            ]
+            row[f"day{i}Stats"] = {
+                "sampleCount": len(sample_cells),
+                "medianT": _median(tvals),
+                "medianApt": _median(avals),
+                "pctFrostTemp": _pct(tvals, 37),
+                "pctFreeze": _pct(tvals, 32),
+                "pctHardFreeze": _pct(tvals, 25),
+                "pctColdAdvisory": _pct(coldvals, adv),
+                "pctExtremeCold": _pct(coldvals, ext),
+                "medianFrostScore": _median(fvals),
+                "pctFrostPossible": _pct_ge(fvals, 20),
+                "pctFrostAreas": _pct_ge(fvals, 40),
+                "pctFrostWidespread": _pct_ge(fvals, 70),
+            }
+        zone_rows[key] = row
+    return zone_rows
+
+
 def forecast_periods():
     """Five overnight periods, rolling strictly at local midnight."""
     today = datetime.now(LOCAL_TZ).date()
@@ -624,6 +731,8 @@ def forecast_periods():
 
 def main():
     counties = json.loads(COUNTIES.read_text(encoding="utf-8"))
+    zones = fetch_public_zones()
+    ZONES_OUTPUT.write_text(json.dumps(zones, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     points = []
     county_rows = {}
     for feat in counties.get("features", []):
@@ -655,6 +764,7 @@ def main():
 
     fields = build_cwa_grids(counties)
     attach_county_areal_stats(counties, county_rows, fields)
+    zone_rows = attach_zone_areal_stats(zones, fields)
 
     payload = {
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -666,11 +776,13 @@ def main():
         "bufferNights": 1,
         "method": "Official NDFD MinT and hourly NDFD guidance. County product screening uses approximate county areal coverage from the raw CWA NDFD sample field with a 50% coverage threshold; display smoothing is not used for qualification. PotFrost follows the ForecastBuilder University of Kentucky decision-tree method hour by hour using temperature, dewpoint, dewpoint depression, wind, and sky cover; original 20/45/100 output is mapped to 20/40/70 wording.",
         "counties": county_rows,
+        "zones": zone_rows,
+        "zonesUrl": "./data/zones.geojson",
         "fields": fields,
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {OUTPUT} with {len(county_rows)} counties")
+    print(f"Wrote {OUTPUT} with {len(county_rows)} counties and {len(zone_rows)} NWS public forecast zones")
 
 
 if __name__ == "__main__":
