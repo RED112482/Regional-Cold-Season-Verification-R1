@@ -223,52 +223,93 @@ def _nearest_series_value(series, target_ts):
 
 
 def frost_score_for_night(result, start_day: date):
-    """UK-style weighted frost-potential indicator (0-100).
+    """University of Kentucky-style PotFrost decision tree.
 
-    Uses the same NDFD ingredients emphasized by the University of Kentucky
-    agricultural frost guidance: temperature, dewpoint depression, wind, and
-    cloud cover. Categories are intended as screening guidance, not an NWS
-    hazard probability.
+    The research flowchart is a two-stage process:
+      1) Dew/frost-support indicator from dewpoint depression, wind and cloud.
+      2) Only if dew is supported, classify frost coverage from temperature.
+
+    Returned values intentionally mirror the operational PotFrost thresholds:
+      0  = frost unlikely
+      20 = patchy frost
+      40 = areas of frost
+      70 = widespread frost
     """
     series = (result or {}).get("series") or {}
     tpairs = _overnight_pairs(series.get("temperature"), start_day)
     if not tpairs:
         return None
+
     tmin, tmin_ts = min(tpairs, key=lambda p: p[0])
     dew = _nearest_series_value(series.get("dewpoint"), tmin_ts)
     wind = _nearest_series_value(series.get("wind"), tmin_ts)
     sky = _nearest_series_value(series.get("sky"), tmin_ts)
 
-    # Temperature is the gate. Favorable moisture/wind/sky cannot create
-    # a frost signal by themselves when the overnight air mass is too warm.
+    # A frost mention is not permitted when the minimum air temperature stays
+    # above 40 F. This directly follows the temperature branch of the flowchart.
     if tmin > 40:
         return 0.0
 
-    score = 0.0
-    if tmin <= 32:
-        score += 45
-    elif tmin <= 34:
-        score += 40
-    elif tmin <= 37:
-        score += 32
-    else:
-        score += 8
+    # Stage 1: Dew/Frost Indicator.
+    # T-Td branch (multiplied by 3 in the flowchart):
+    #   <= 5 F -> 6
+    #   5-9 F  -> 3
+    #   > 9 F  -> no dew likely
+    if dew is None:
+        return 0.0
+    dep = max(0.0, tmin - dew)
+    if dep > 9:
+        return 0.0
+    td_value = 6 if dep <= 5 else 3
 
-    dep = None if dew is None else max(0.0, tmin - dew)
-    if dep is not None:
-        score += 25 if dep <= 2 else 20 if dep <= 4 else 12 if dep <= 7 else 5 if dep <= 10 else 0
+    # Wind branch (multiplied by 2):
+    #   <= 3 kt (or <= 3.5 mph) -> 4
+    #   3-7 kt (or 3.5-8 mph)   -> 2
+    #   > 7 kt (or > 8 mph)     -> no dew likely
+    if wind is None:
+        return 0.0
+    if wind > 7:
+        return 0.0
+    wind_value = 4 if wind <= 3 else 2
 
-    if wind is not None:
-        score += 20 if wind <= 3 else 15 if wind <= 5 else 8 if wind <= 8 else 3 if wind <= 12 else 0
+    # Cloud branch:
+    #   clear/few -> 2
+    #   scattered -> 1
+    #   broken/overcast -> no dew likely
+    # NDFD sky cover is percent. Approximate aviation categories with:
+    #   <= 25% CLR/FEW, 26-50% SCT, > 50% BKN/OVC.
+    if sky is None:
+        return 0.0
+    if sky > 50:
+        return 0.0
+    cloud_value = 2 if sky <= 25 else 1
 
-    if sky is not None:
-        score += 10 if sky <= 20 else 8 if sky <= 40 else 4 if sky <= 60 else 0
+    dew_indicator = td_value * 3 + wind_value * 2 + cloud_value
+    # Flowchart dew decision:
+    #   >10 to 12 = dew likely
+    #   >8 to 10  = chance of dew
+    #   >6 to 8   = slight chance of dew
+    # For frost generation, require at least the "chance of dew" branch.
+    if dew_indicator <= 8:
+        return 0.0
 
-    # Above 37F, retain only a sub-threshold marginal signal. The map's
-    # first actionable category begins at 20.
-    if tmin > 37:
-        score = min(score, 19.0)
-    return round(max(0.0, min(100.0, score)), 1)
+    # Stage 2: Frost Indicator, only after dew-support passes.
+    # The flowchart assigns:
+    #   T <= 37 F : 3
+    #   37 < T <= 40 F : 2
+    #   T > 40 F : 0
+    temp_value = 3 if tmin <= 37 else 2
+
+    # Map the frost indicator to the requested PotFrost mentions.
+    # Stronger dew support + <=32 favors widespread; otherwise <=37 supports
+    # areas, and 37-40 remains patchy.
+    if temp_value == 3:
+        if tmin <= 32 and dew_indicator > 10:
+            return 70.0
+        return 40.0
+    if temp_value == 2:
+        return 20.0
+    return 0.0
 def overnight_min(values, times, start_day: date):
     """Return an overnight minimum from local 6 PM through 6 AM."""
     candidates = [v for v, ts in zip(values or [], times or []) if v is not None and _in_overnight(ts, start_day)]
