@@ -44,10 +44,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           cp site/data/forecast.json /tmp/forecast.json
+          cp site/data/zones.geojson /tmp/zones.geojson
           git fetch origin main
           git reset --hard origin/main
           cp /tmp/forecast.json site/data/forecast.json
-          git add site/data/forecast.json
+          cp /tmp/zones.geojson site/data/zones.geojson
+          git add site/data/forecast.json site/data/zones.geojson
 
           if git diff --cached --quiet; then
             echo "Forecast data unchanged."
