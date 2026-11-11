@@ -777,6 +777,7 @@ def main():
         "method": "Official NDFD MinT and hourly NDFD guidance. County product screening uses approximate county areal coverage from the raw CWA NDFD sample field with a 50% coverage threshold; display smoothing is not used for qualification. PotFrost follows the ForecastBuilder University of Kentucky decision-tree method hour by hour using temperature, dewpoint, dewpoint depression, wind, and sky cover; original 20/45/100 output is mapped to 20/40/70 wording.",
         "counties": county_rows,
         "zones": zone_rows,
+        "zonesGeoJson": zones,
         "zonesUrl": "./data/zones.geojson",
         "fields": fields,
     }
