@@ -404,13 +404,12 @@ def main():
     cwas = {}
     for wfo in WFO_IDS:
         rows = [daily[wfo].get(d.isoformat()) for d in verify_days]
-        rows = [r for r in rows if r]
-        dates = [r["date"] for r in rows]
-        daily_mae = {s: [((r.get(s) or {}).get("mae")) for r in rows] for s in source_names}
-        daily_bias = {s: [((r.get(s) or {}).get("bias")) for r in rows] for s in source_names}
+        dates = [d.isoformat() for d in verify_days]
+        daily_mae = {s: [(((r or {}).get(s) or {}).get("mae")) for r in rows] for s in source_names}
+        daily_bias = {s: [(((r or {}).get(s) or {}).get("bias")) for r in rows] for s in source_names}
         ranking = []
         for s in source_names:
-            ms = [r.get(s) for r in rows if r.get(s)]
+            ms = [(r or {}).get(s) for r in rows if (r or {}).get(s)]
             if not ms:
                 continue
             total_n = sum(m["samples"] for m in ms)
