@@ -39,6 +39,7 @@ OUTPUT = DATA / "verification.json"
 WFO_IDS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 NBM_BUCKET = "noaa-nbm-grib2-pds"
 RTMA_BUCKET = "noaa-rtma-pds"
+NDFD_BUCKET = "noaa-ndfd-pds"
 PERCENTILES = [10, 25, 50, 75, 90]
 
 s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
@@ -201,7 +202,7 @@ def fetch_message(bucket, key, line_index, lines):
                 lons = np.asarray(codes_get_array(gid, "longitudes"), dtype=float)
                 units = str(codes_get(gid, "units") or "")
                 meta = {}
-                for name in ("shortName", "name", "stepType", "typeOfStatisticalProcessing", "percentileValue"):
+                for name in ("shortName", "name", "stepType", "typeOfStatisticalProcessing", "percentileValue", "validityDate", "validityTime", "dataDate", "dataTime", "forecastTime"):
                     try:
                         meta[name] = codes_get(gid, name)
                     except Exception:
@@ -227,6 +228,140 @@ def select_idx_candidates(lines, required):
         low = line.lower()
         if all(x.lower() in low for x in required):
             out.append(i)
+    return out
+
+
+
+_ndfd_mint_prefix = None
+
+
+def discover_ndfd_mint_prefix():
+    """Find the archived WMO parameter prefix for NDFD minimum temperature."""
+    global _ndfd_mint_prefix
+    if _ndfd_mint_prefix:
+        return _ndfd_mint_prefix
+    resp = s3.list_objects_v2(Bucket=NDFD_BUCKET, Prefix="wmo/", Delimiter="/")
+    prefixes = [p.get("Prefix", "") for p in resp.get("CommonPrefixes", [])]
+    choices = [p for p in prefixes if "mint" in p.lower() or ("min" in p.lower() and "temp" in p.lower())]
+    if not choices:
+        raise RuntimeError("Could not discover NDFD minimum-temperature WMO archive prefix")
+    _ndfd_mint_prefix = sorted(choices, key=len)[0]
+    return _ndfd_mint_prefix
+
+
+def ndfd_archive_keys(issue_day):
+    """List archived NDFD MinT WMO files issued near 12Z on issue_day."""
+    root = discover_ndfd_mint_prefix()
+    prefix = f"{root}{issue_day:%Y/%m/%d}/"
+    keys = []
+    token = None
+    while True:
+        kw = {"Bucket": NDFD_BUCKET, "Prefix": prefix, "MaxKeys": 1000}
+        if token:
+            kw["ContinuationToken"] = token
+        resp = s3.list_objects_v2(**kw)
+        for obj in resp.get("Contents", []):
+            key = obj["Key"]
+            # WMO archive names conventionally end in YYYYMMDDHHMM.
+            tail = key.rsplit("_", 1)[-1]
+            try:
+                ts = datetime.strptime(tail[:12], "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            if abs((ts - datetime(issue_day.year, issue_day.month, issue_day.day, 12, tzinfo=timezone.utc)).total_seconds()) <= 75 * 60:
+                keys.append((abs((ts.hour * 60 + ts.minute) - 12 * 60), key))
+        if not resp.get("IsTruncated"):
+            break
+        token = resp.get("NextContinuationToken")
+    if not keys:
+        raise RuntimeError(f"No archived NDFD MinT WMO files found near 12Z for {issue_day}")
+    return [k for _, k in sorted(keys)]
+
+
+def decode_ndfd_object(key, valid_day):
+    """Decode all GRIB2 messages in one archived NDFD WMO object."""
+    body = s3.get_object(Bucket=NDFD_BUCKET, Key=key)["Body"].read()
+    # WMO wrappers precede the embedded GRIB messages; extract each GRIB...7777 block.
+    messages = []
+    pos = 0
+    while True:
+        a = body.find(b"GRIB", pos)
+        if a < 0:
+            break
+        z = body.find(b"7777", a)
+        if z < 0:
+            break
+        chunk = body[a:z+4]
+        pos = z + 4
+        fd, path = tempfile.mkstemp(suffix=".grib2")
+        os.close(fd)
+        try:
+            Path(path).write_bytes(chunk)
+            with open(path, "rb") as fh:
+                gid = codes_grib_new_from_file(fh)
+                if gid is None:
+                    continue
+                try:
+                    vals = np.asarray(codes_get_array(gid, "values"), dtype=float)
+                    lats = np.asarray(codes_get_array(gid, "latitudes"), dtype=float)
+                    lons = np.asarray(codes_get_array(gid, "longitudes"), dtype=float)
+                    units = str(codes_get(gid, "units") or "")
+                    try:
+                        vd = int(codes_get(gid, "validityDate"))
+                        vt = int(codes_get(gid, "validityTime"))
+                    except Exception:
+                        vd = vt = None
+                finally:
+                    codes_release(gid)
+            if vd is not None and str(vd) != valid_day.strftime("%Y%m%d"):
+                continue
+            if vt is not None and int(vt) not in (1200, 120000):
+                continue
+            if "K" in units or units.lower().startswith("k"):
+                vals = (vals - 273.15) * 9.0 / 5.0 + 32.0
+            vals = np.where(np.isfinite(vals) & (vals > -120.0) & (vals < 160.0), vals, np.nan)
+            lons = np.where(lons > 180, lons - 360, lons)
+            if np.isfinite(vals).any():
+                messages.append((vals, lats, lons, {"source": key}))
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+    return messages
+
+
+def read_ndfd_archive(issue_day, valid_day):
+    """Return all archived NDFD MinT grids from the 12Z issuance window."""
+    grids = []
+    for key in ndfd_archive_keys(issue_day):
+        try:
+            grids.extend(decode_ndfd_object(key, valid_day))
+        except Exception:
+            continue
+    if not grids:
+        raise RuntimeError(f"No usable archived NDFD MinT grids for {issue_day} -> {valid_day}")
+    return grids
+
+
+def sample_grib_collection(grids, points):
+    """Sample nearest value from a collection of NDFD sector grids."""
+    out = np.full(len(points), np.nan, dtype=float)
+    for n, (lat, lon, _) in enumerate(points):
+        best_d = None
+        best_v = None
+        for vals, lats, lons, _ in grids:
+            mask = np.isfinite(vals) & (lats >= lat - .5) & (lats <= lat + .5) & (lons >= lon - .5) & (lons <= lon + .5)
+            if not mask.any():
+                continue
+            vv, yy, xx = vals[mask], lats[mask], lons[mask]
+            d = (yy - lat) ** 2 + ((xx - lon) * math.cos(math.radians(lat))) ** 2
+            j = int(np.argmin(d))
+            if best_d is None or float(d[j]) < best_d:
+                best_d = float(d[j])
+                best_v = float(vv[j])
+        if best_v is not None:
+            out[n] = best_v
     return out
 
 
@@ -350,6 +485,11 @@ def main():
         issue_day = valid_day - timedelta(days=1)
         snap, sha, snap_time = historical_forecast_snapshot(issue_day)
         try:
+            ndfd_archive = read_ndfd_archive(issue_day, valid_day)
+        except Exception as exc:
+            ndfd_archive = None
+            errors.append(f"{valid_day}: archived NDFD unavailable ({exc}); using repository snapshot if present")
+        try:
             nbm_det, nbm_pct = read_nbm(issue_day)
             rtma_hours = [read_rtma_hour(valid_day, h) for h in range(0, 13)]
         except Exception as exc:
@@ -373,10 +513,11 @@ def main():
             points = sample_nodes(field, geoms[wfo])
             if len(points) < 3:
                 continue
-            if snap is not None:
+            if ndfd_archive is not None:
+                ndfd = sample_grib_collection(ndfd_archive, points)
+            elif snap is not None:
                 snap_field = (snap.get("fields") or {}).get(wfo) or {}
                 snap_points = sample_nodes(snap_field, geoms[wfo], require_values=True)
-                # Align NDFD to the common geometry by nearest node.
                 ndfd = np.full(len(points), np.nan, dtype=float)
                 if snap_points:
                     sla = np.array([p[0] for p in snap_points]); slo = np.array([p[1] for p in snap_points]); sv = np.array([p[2] for p in snap_points], dtype=float)
@@ -423,7 +564,7 @@ def main():
             "dailyBias": daily_bias,
             "ranking": ranking,
             "leadLabel": "12Z issue → following 12Z MinT",
-            "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z.",
+            "method": "CWA land-only sample nodes; archived NOAA NDFD and NBM are compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z.",
         }
 
     payload = {
@@ -433,7 +574,7 @@ def main():
         "verification": "RTMA",
         "windowDays": 5,
         "issueCycle": "12Z",
-        "method": "Rolling CWA land MAE and mean bias versus RTMA. NBM percentile ranking is diagnostic only.",
+        "method": "Rolling CWA land MAE and mean bias versus RTMA using NOAA archived NDFD and NBM guidance. NBM percentile ranking is diagnostic only.",
         "cwas": cwas,
         "errors": errors[-30:],
     }
