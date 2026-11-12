@@ -240,6 +240,11 @@ def discover_ndfd_mint_prefix():
     global _ndfd_mint_prefix
     if _ndfd_mint_prefix:
         return _ndfd_mint_prefix
+    # NDFD element name is normally "mint"; verify the prefix exists first.
+    test = s3.list_objects_v2(Bucket=NDFD_BUCKET, Prefix="wmo/mint/", MaxKeys=1)
+    if test.get("KeyCount", 0):
+        _ndfd_mint_prefix = "wmo/mint/"
+        return _ndfd_mint_prefix
     resp = s3.list_objects_v2(Bucket=NDFD_BUCKET, Prefix="wmo/", Delimiter="/")
     prefixes = [p.get("Prefix", "") for p in resp.get("CommonPrefixes", [])]
     choices = [p for p in prefixes if "mint" in p.lower() or ("min" in p.lower() and "temp" in p.lower())]
@@ -250,10 +255,14 @@ def discover_ndfd_mint_prefix():
 
 
 def ndfd_archive_keys(issue_day):
-    """List archived NDFD MinT WMO files issued near 12Z on issue_day."""
+    """List archived NDFD MinT WMO files for issue_day.
+
+    Filename timestamps are used only for ordering; actual cycle/valid-time
+    selection is done from GRIB metadata because archive naming can vary.
+    """
     root = discover_ndfd_mint_prefix()
     prefix = f"{root}{issue_day:%Y/%m/%d}/"
-    keys = []
+    ranked = []
     token = None
     while True:
         kw = {"Bucket": NDFD_BUCKET, "Prefix": prefix, "MaxKeys": 1000}
@@ -262,23 +271,23 @@ def ndfd_archive_keys(issue_day):
         resp = s3.list_objects_v2(**kw)
         for obj in resp.get("Contents", []):
             key = obj["Key"]
-            # WMO archive names conventionally end in YYYYMMDDHHMM.
+            rank = 99999
             tail = key.rsplit("_", 1)[-1]
             try:
                 ts = datetime.strptime(tail[:12], "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                rank = abs((ts.hour * 60 + ts.minute) - 12 * 60)
             except Exception:
-                continue
-            if abs((ts - datetime(issue_day.year, issue_day.month, issue_day.day, 12, tzinfo=timezone.utc)).total_seconds()) <= 75 * 60:
-                keys.append((abs((ts.hour * 60 + ts.minute) - 12 * 60), key))
+                pass
+            ranked.append((rank, key))
         if not resp.get("IsTruncated"):
             break
         token = resp.get("NextContinuationToken")
-    if not keys:
-        raise RuntimeError(f"No archived NDFD MinT WMO files found near 12Z for {issue_day}")
-    return [k for _, k in sorted(keys)]
+    if not ranked:
+        raise RuntimeError(f"No archived NDFD MinT WMO files found for {issue_day}")
+    return [k for _, k in sorted(ranked)]
 
 
-def decode_ndfd_object(key, valid_day):
+def decode_ndfd_object(key, issue_day, valid_day):
     """Decode all GRIB2 messages in one archived NDFD WMO object."""
     body = s3.get_object(Bucket=NDFD_BUCKET, Key=key)["Body"].read()
     # WMO wrappers precede the embedded GRIB messages; extract each GRIB...7777 block.
@@ -311,12 +320,25 @@ def decode_ndfd_object(key, valid_day):
                         vt = int(codes_get(gid, "validityTime"))
                     except Exception:
                         vd = vt = None
+                    try:
+                        dd = int(codes_get(gid, "dataDate"))
+                        dtm = int(codes_get(gid, "dataTime"))
+                    except Exception:
+                        dd = dtm = None
                 finally:
                     codes_release(gid)
             if vd is not None and str(vd) != valid_day.strftime("%Y%m%d"):
                 continue
             if vt is not None and int(vt) not in (1200, 120000):
                 continue
+            # Prefer the 12Z issuance cycle. Some products encode dataTime as
+            # HHMM, others as HH; accept 11-13Z to accommodate dissemination.
+            if dd is not None and str(dd) != issue_day.strftime("%Y%m%d"):
+                continue
+            if dtm is not None:
+                hh = int(dtm) // 100 if int(dtm) >= 100 else int(dtm)
+                if hh < 11 or hh > 13:
+                    continue
             if "K" in units or units.lower().startswith("k"):
                 vals = (vals - 273.15) * 9.0 / 5.0 + 32.0
             vals = np.where(np.isfinite(vals) & (vals > -120.0) & (vals < 160.0), vals, np.nan)
@@ -332,13 +354,16 @@ def decode_ndfd_object(key, valid_day):
 
 
 def read_ndfd_archive(issue_day, valid_day):
-    """Return all archived NDFD MinT grids from the 12Z issuance window."""
+    """Return archived NDFD MinT grids from the 12Z issuance window."""
     grids = []
     for key in ndfd_archive_keys(issue_day):
         try:
-            grids.extend(decode_ndfd_object(key, valid_day))
+            grids.extend(decode_ndfd_object(key, issue_day, valid_day))
         except Exception:
             continue
+        # A few sector grids are enough to cover the supported Gulf/Southeast CWAs.
+        if len(grids) >= 8:
+            break
     if not grids:
         raise RuntimeError(f"No usable archived NDFD MinT grids for {issue_day} -> {valid_day}")
     return grids
