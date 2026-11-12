@@ -37,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install numpy boto3 eccodes eccodeslib
 
-      - name: Build rolling 5-day MinT verification
+      - name: Build rolling 5-day MinT verification (NDFD archive + RTMA)
         run: python scripts/build_verification.py
 
       - name: Save verification JSON
