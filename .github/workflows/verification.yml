@@ -1,0 +1,60 @@
+name: Refresh NBM verification trends
+
+on:
+  schedule:
+    - cron: "30 14 * * *"
+      timezone: "America/Chicago"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_verification.py"
+      - ".github/workflows/verification.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "nbm-verification-data"
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository with forecast history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GRIB verification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy boto3 eccodes eccodeslib
+
+      - name: Build rolling 5-day MinT verification
+        run: python scripts/build_verification.py
+
+      - name: Save verification JSON
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          cp site/data/verification.json /tmp/verification.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/verification.json site/data/verification.json
+          git add site/data/verification.json
+
+          if git diff --cached --quiet; then
+            echo "Verification data unchanged."
+          else
+            git commit -m "Refresh NBM verification trends"
+            git push origin HEAD:main
+          fi
