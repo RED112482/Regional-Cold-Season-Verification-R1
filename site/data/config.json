@@ -1,6 +1,6 @@
 {
   "appTitle": "NWS Cold Season Verification and Forecast Tool",
-  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R13-NBM-VERIFY",
+  "buildId": "REGIONAL-COLD-SEASON-GITHUB-R13-NBM-VERIFY-HOTFIX",
   "dataMode": "COLD_SEASON_COUNTY_VERIFICATION",
   "wfos": [
     "MOB",
