@@ -1,11 +1,502 @@
 {
-  "generatedUtc": "2026-11-12T07:47:54.510Z",
+  "generatedUtc": "2026-11-12T07:48:41Z",
   "nbmVersion": "NBM v5.1",
   "element": "MinT",
   "verification": "URMA",
   "windowDays": 5,
   "issueCycle": "12Z",
-  "status": "Verification workflow is initializing; no completed 5-day dataset has been committed yet.",
   "method": "Rolling CWA land MAE and mean bias versus URMA. NBM percentile ranking is diagnostic only.",
-  "cwas": {}
+  "cwas": {
+    "MOB": {
+      "dates": [
+        "2026-11-10"
+      ],
+      "dailyMae": {
+        "NDFD": [
+          1.656291390728511
+        ],
+        "NBM Deterministic": [
+          504.99083443708616
+        ],
+        "P10": [
+          2.546928476821193
+        ],
+        "P25": [
+          1.31677748344371
+        ],
+        "P50": [
+          1.684037086092715
+        ],
+        "P75": [
+          3.906095364238405
+        ],
+        "P90": [
+          5.318523178807941
+        ]
+      },
+      "dailyBias": {
+        "NDFD": [
+          -1.3317615894040287
+        ],
+        "NBM Deterministic": [
+          -504.99083443708616
+        ],
+        "P10": [
+          -2.517937748344372
+        ],
+        "P25": [
+          -0.9559907284768218
+        ],
+        "P50": [
+          1.6004026490066199
+        ],
+        "P75": [
+          3.906095364238405
+        ],
+        "P90": [
+          5.318523178807941
+        ]
+      },
+      "ranking": [
+        {
+          "source": "NDFD",
+          "mae": 1.656,
+          "bias": -1.332,
+          "samples": 151
+        },
+        {
+          "source": "NBM Deterministic",
+          "mae": 504.991,
+          "bias": -504.991,
+          "samples": 151
+        },
+        {
+          "source": "P10",
+          "mae": 2.547,
+          "bias": -2.518,
+          "samples": 151
+        },
+        {
+          "source": "P25",
+          "mae": 1.317,
+          "bias": -0.956,
+          "samples": 151
+        },
+        {
+          "source": "P50",
+          "mae": 1.684,
+          "bias": 1.6,
+          "samples": 151
+        },
+        {
+          "source": "P75",
+          "mae": 3.906,
+          "bias": 3.906,
+          "samples": 151
+        },
+        {
+          "source": "P90",
+          "mae": 5.319,
+          "bias": 5.319,
+          "samples": 151
+        }
+      ],
+      "leadLabel": "12Z issue → following 12Z MinT",
+      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly URMA 2-m temperature from 00Z–12Z."
+    },
+    "LIX": {
+      "dates": [
+        "2026-11-10"
+      ],
+      "dailyMae": {
+        "NDFD": [
+          2.9474482758621074
+        ],
+        "NBM Deterministic": [
+          512.4987931034483
+        ],
+        "P10": [
+          3.451468965517244
+        ],
+        "P25": [
+          2.267518965517247
+        ],
+        "P50": [
+          1.1120896551724155
+        ],
+        "P75": [
+          1.5389999999999944
+        ],
+        "P90": [
+          2.4565344827586206
+        ]
+      },
+      "dailyBias": {
+        "NDFD": [
+          -2.3133103448276375
+        ],
+        "NBM Deterministic": [
+          -512.4987931034483
+        ],
+        "P10": [
+          -3.1075448275862074
+        ],
+        "P25": [
+          -1.7340672413793152
+        ],
+        "P50": [
+          0.02734137931034567
+        ],
+        "P75": [
+          1.4241103448275825
+        ],
+        "P90": [
+          2.4555724137931025
+        ]
+      },
+      "ranking": [
+        {
+          "source": "NDFD",
+          "mae": 2.947,
+          "bias": -2.313,
+          "samples": 116
+        },
+        {
+          "source": "NBM Deterministic",
+          "mae": 512.499,
+          "bias": -512.499,
+          "samples": 116
+        },
+        {
+          "source": "P10",
+          "mae": 3.451,
+          "bias": -3.108,
+          "samples": 116
+        },
+        {
+          "source": "P25",
+          "mae": 2.268,
+          "bias": -1.734,
+          "samples": 116
+        },
+        {
+          "source": "P50",
+          "mae": 1.112,
+          "bias": 0.027,
+          "samples": 116
+        },
+        {
+          "source": "P75",
+          "mae": 1.539,
+          "bias": 1.424,
+          "samples": 116
+        },
+        {
+          "source": "P90",
+          "mae": 2.457,
+          "bias": 2.456,
+          "samples": 116
+        }
+      ],
+      "leadLabel": "12Z issue → following 12Z MinT",
+      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly URMA 2-m temperature from 00Z–12Z."
+    },
+    "JAN": {
+      "dates": [
+        "2026-11-10"
+      ],
+      "dailyMae": {
+        "NDFD": [
+          3.657029940119805
+        ],
+        "NBM Deterministic": [
+          505.03699401197593
+        ],
+        "P10": [
+          4.705027544910183
+        ],
+        "P25": [
+          3.263216766467066
+        ],
+        "P50": [
+          1.4046467065868287
+        ],
+        "P75": [
+          2.1236119760478984
+        ],
+        "P90": [
+          4.63548502994012
+        ]
+      },
+      "dailyBias": {
+        "NDFD": [
+          -3.4416287425150234
+        ],
+        "NBM Deterministic": [
+          -505.03699401197593
+        ],
+        "P10": [
+          -4.65702035928144
+        ],
+        "P25": [
+          -3.1457532934131733
+        ],
+        "P50": [
+          -0.9028455089820366
+        ],
+        "P75": [
+          2.016776047904187
+        ],
+        "P90": [
+          4.6354419161676645
+        ]
+      },
+      "ranking": [
+        {
+          "source": "NDFD",
+          "mae": 3.657,
+          "bias": -3.442,
+          "samples": 167
+        },
+        {
+          "source": "NBM Deterministic",
+          "mae": 505.037,
+          "bias": -505.037,
+          "samples": 167
+        },
+        {
+          "source": "P10",
+          "mae": 4.705,
+          "bias": -4.657,
+          "samples": 167
+        },
+        {
+          "source": "P25",
+          "mae": 3.263,
+          "bias": -3.146,
+          "samples": 167
+        },
+        {
+          "source": "P50",
+          "mae": 1.405,
+          "bias": -0.903,
+          "samples": 167
+        },
+        {
+          "source": "P75",
+          "mae": 2.124,
+          "bias": 2.017,
+          "samples": 167
+        },
+        {
+          "source": "P90",
+          "mae": 4.635,
+          "bias": 4.635,
+          "samples": 167
+        }
+      ],
+      "leadLabel": "12Z issue → following 12Z MinT",
+      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly URMA 2-m temperature from 00Z–12Z."
+    },
+    "BMX": {
+      "dates": [
+        "2026-11-10"
+      ],
+      "dailyMae": {
+        "NDFD": [
+          1.2482064516128801
+        ],
+        "NBM Deterministic": [
+          499.5349548387097
+        ],
+        "P10": [
+          1.7734761290322614
+        ],
+        "P25": [
+          0.987212903225804
+        ],
+        "P50": [
+          1.9277651612903224
+        ],
+        "P75": [
+          3.880254193548381
+        ],
+        "P90": [
+          5.844541935483868
+        ]
+      },
+      "dailyBias": {
+        "NDFD": [
+          0.7246451612902677
+        ],
+        "NBM Deterministic": [
+          -499.5349548387097
+        ],
+        "P10": [
+          -1.655512258064522
+        ],
+        "P25": [
+          0.12495483870967344
+        ],
+        "P50": [
+          1.839576774193545
+        ],
+        "P75": [
+          3.880254193548381
+        ],
+        "P90": [
+          5.844541935483868
+        ]
+      },
+      "ranking": [
+        {
+          "source": "NDFD",
+          "mae": 1.248,
+          "bias": 0.725,
+          "samples": 155
+        },
+        {
+          "source": "NBM Deterministic",
+          "mae": 499.535,
+          "bias": -499.535,
+          "samples": 155
+        },
+        {
+          "source": "P10",
+          "mae": 1.773,
+          "bias": -1.656,
+          "samples": 155
+        },
+        {
+          "source": "P25",
+          "mae": 0.987,
+          "bias": 0.125,
+          "samples": 155
+        },
+        {
+          "source": "P50",
+          "mae": 1.928,
+          "bias": 1.84,
+          "samples": 155
+        },
+        {
+          "source": "P75",
+          "mae": 3.88,
+          "bias": 3.88,
+          "samples": 155
+        },
+        {
+          "source": "P90",
+          "mae": 5.845,
+          "bias": 5.845,
+          "samples": 155
+        }
+      ],
+      "leadLabel": "12Z issue → following 12Z MinT",
+      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly URMA 2-m temperature from 00Z–12Z."
+    },
+    "TAE": {
+      "dates": [
+        "2026-11-10"
+      ],
+      "dailyMae": {
+        "NDFD": [
+          2.0108843537414764
+        ],
+        "NBM Deterministic": [
+          504.1157142857144
+        ],
+        "P10": [
+          1.7517551020408197
+        ],
+        "P25": [
+          1.0773918367346957
+        ],
+        "P50": [
+          2.2218367346938748
+        ],
+        "P75": [
+          4.496546938775509
+        ],
+        "P90": [
+          5.928257142857142
+        ]
+      },
+      "dailyBias": {
+        "NDFD": [
+          1.33850340136049
+        ],
+        "NBM Deterministic": [
+          -504.1157142857144
+        ],
+        "P10": [
+          -1.5772163265306154
+        ],
+        "P25": [
+          -0.1677918367346996
+        ],
+        "P50": [
+          2.1907836734693866
+        ],
+        "P75": [
+          4.496546938775509
+        ],
+        "P90": [
+          5.928257142857142
+        ]
+      },
+      "ranking": [
+        {
+          "source": "NDFD",
+          "mae": 2.011,
+          "bias": 1.339,
+          "samples": 147
+        },
+        {
+          "source": "NBM Deterministic",
+          "mae": 504.116,
+          "bias": -504.116,
+          "samples": 147
+        },
+        {
+          "source": "P10",
+          "mae": 1.752,
+          "bias": -1.577,
+          "samples": 147
+        },
+        {
+          "source": "P25",
+          "mae": 1.077,
+          "bias": -0.168,
+          "samples": 147
+        },
+        {
+          "source": "P50",
+          "mae": 2.222,
+          "bias": 2.191,
+          "samples": 147
+        },
+        {
+          "source": "P75",
+          "mae": 4.497,
+          "bias": 4.497,
+          "samples": 147
+        },
+        {
+          "source": "P90",
+          "mae": 5.928,
+          "bias": 5.928,
+          "samples": 147
+        }
+      ],
+      "leadLabel": "12Z issue → following 12Z MinT",
+      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly URMA 2-m temperature from 00Z–12Z."
+    }
+  },
+  "errors": [
+    "2026-11-06: no NDFD 12Z repository snapshot",
+    "2026-11-07: no NDFD 12Z repository snapshot",
+    "2026-11-08: no NDFD 12Z repository snapshot",
+    "2026-11-09: no NDFD 12Z repository snapshot"
+  ]
 }
