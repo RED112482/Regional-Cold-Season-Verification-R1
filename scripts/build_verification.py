@@ -6,7 +6,7 @@ Method:
 - Forecast snapshot/cycle: 12Z on the preceding day.
 - NDFD: historical forecast.json snapshots already committed by this repository.
 - NBM: operational CONUS Core + QMD GRIB2 from NOAA Open Data (12Z, F024).
-- Verification: hourly URMA 2-m temperature from 00Z through 12Z; the minimum
+- Verification: hourly RTMA 2-m temperature from 00Z through 12Z; the minimum
   at each sample point is the verifying MinT.
 - Spatial sampling: the existing NDFD raw sample nodes that fall inside each
   supported CWA's county polygons. This keeps all sources on the identical
@@ -38,7 +38,7 @@ COUNTIES = DATA / "counties.geojson"
 OUTPUT = DATA / "verification.json"
 WFO_IDS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 NBM_BUCKET = "noaa-nbm-grib2-pds"
-URMA_BUCKET = "noaa-urma-pds"
+RTMA_BUCKET = "noaa-rtma-pds"
 PERCENTILES = [10, 25, 50, 75, 90]
 
 s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
@@ -123,7 +123,7 @@ def historical_forecast_snapshot(issue_day):
     return None, None, None
 
 
-def sample_nodes(field, geoms):
+def sample_nodes(field, geoms, require_values=False):
     nx, ny = int(field["nx"]), int(field["ny"])
     xmin, xmax = float(field["xmin"]), float(field["xmax"])
     ymin, ymax = float(field["ymin"]), float(field["ymax"])
@@ -135,7 +135,7 @@ def sample_nodes(field, geoms):
             lon = xmin + i * (xmax - xmin) / max(1, nx - 1)
             k = j * nx + i
             v = safe_float(vals[k]) if k < len(vals) else None
-            if v is not None and inside_cwa(lon, lat, geoms):
+            if inside_cwa(lon, lat, geoms) and (not require_values or v is not None):
                 out.append((lat, lon, v))
     return out
 
@@ -210,6 +210,8 @@ def fetch_message(bucket, key, line_index, lines):
                 codes_release(gid)
         if "K" in units or units.lower().startswith("k"):
             vals = (vals - 273.15) * 9.0 / 5.0 + 32.0
+        # Treat impossible temperatures / GRIB missing sentinels as missing.
+        vals = np.where(np.isfinite(vals) & (vals > -120.0) & (vals < 160.0), vals, np.nan)
         lons = np.where(lons > 180, lons - 360, lons)
         return vals, lats, lons, meta
     finally:
@@ -249,7 +251,16 @@ def read_nbm(day):
         cand = select_idx_candidates(core_lines, ["tmp", "2 m above ground"])
     if not cand:
         raise RuntimeError("Could not locate NBM deterministic MinT message")
-    det = fetch_message(NBM_BUCKET, core, cand[-1], core_lines)
+    det = None
+    for ci in reversed(cand):
+        trial = fetch_message(NBM_BUCKET, core, ci, core_lines)
+        vals = trial[0]
+        finite = vals[np.isfinite(vals)]
+        if finite.size and -80.0 < float(np.nanmedian(finite)) < 130.0:
+            det = trial
+            break
+    if det is None:
+        raise RuntimeError("NBM deterministic MinT field failed physical-range checks")
 
     qlines = idx_lines(NBM_BUCKET, qmd)
     min_candidates = select_idx_candidates(qlines, ["tmp", "min"])
@@ -274,22 +285,22 @@ def read_nbm(day):
     return det, pct
 
 
-def urma_key(day, hour):
+def rtma_key(day, hour):
     ds = day.strftime("%Y%m%d")
-    name = f"urma2p5.t{hour:02d}z.2dvaranl_ndfd.grb2_wexp"
-    preferred = f"urma2p5.{ds}/{name}"
-    return find_key(URMA_BUCKET, preferred, f"urma2p5.{ds}/", name)
+    name = f"rtma2p5.t{hour:02d}z.2dvaranl_ndfd.grb2_wexp"
+    preferred = f"rtma2p5.{ds}/{name}"
+    return find_key(RTMA_BUCKET, preferred, f"rtma2p5.{ds}/", name)
 
 
-def read_urma_hour(day, hour):
-    key = urma_key(day, hour)
-    lines = idx_lines(URMA_BUCKET, key)
+def read_rtma_hour(day, hour):
+    key = rtma_key(day, hour)
+    lines = idx_lines(RTMA_BUCKET, key)
     cand = select_idx_candidates(lines, ["tmp", "2 m above ground"])
     if not cand:
         cand = select_idx_candidates(lines, ["tmp", "2 m"])
     if not cand:
-        raise RuntimeError(f"Could not locate URMA 2m temperature {day} {hour:02d}Z")
-    return fetch_message(URMA_BUCKET, key, cand[0], lines)
+        raise RuntimeError(f"Could not locate RTMA 2m temperature {day} {hour:02d}Z")
+    return fetch_message(RTMA_BUCKET, key, cand[0], lines)
 
 
 def sample_grib(grib, points):
@@ -324,9 +335,10 @@ def metrics(fcst, obs):
 def main():
     geoms = cwa_geometries()
     now = datetime.now(timezone.utc)
-    # URMA is delayed; use the most recent 12Z period expected to be complete.
-    latest = (now - timedelta(hours=8)).date()
-    if now.hour < 20:
+    # RTMA is hourly and near-real-time. Use the latest overnight window whose
+    # 12Z analysis should be complete.
+    latest = now.date()
+    if now.hour < 14:
         latest -= timedelta(days=1)
     verify_days = [latest - timedelta(days=i) for i in range(4, -1, -1)]
 
@@ -337,28 +349,46 @@ def main():
     for valid_day in verify_days:
         issue_day = valid_day - timedelta(days=1)
         snap, sha, snap_time = historical_forecast_snapshot(issue_day)
-        if not snap:
-            errors.append(f"{valid_day}: no NDFD 12Z repository snapshot")
-            continue
         try:
             nbm_det, nbm_pct = read_nbm(issue_day)
-            urma_hours = [read_urma_hour(valid_day, h) for h in range(0, 13)]
+            rtma_hours = [read_rtma_hour(valid_day, h) for h in range(0, 13)]
         except Exception as exc:
             errors.append(f"{valid_day}: {exc}")
             continue
 
+        # Use the closest available NDFD grid geometry for the common land sample.
+        # NDFD scoring itself is left missing when that day's historical snapshot
+        # does not exist; NBM/RTMA still populate all five requested nights.
+        geometry_snap = snap
+        if geometry_snap is None:
+            try:
+                geometry_snap = json.loads((DATA / "forecast.json").read_text())
+            except Exception:
+                geometry_snap = None
+
         for wfo in WFO_IDS:
-            field = (snap.get("fields") or {}).get(wfo)
+            field = ((geometry_snap or {}).get("fields") or {}).get(wfo)
             if not field:
                 continue
             points = sample_nodes(field, geoms[wfo])
             if len(points) < 3:
                 continue
-            ndfd = np.array([p[2] for p in points], dtype=float)
+            if snap is not None:
+                snap_field = (snap.get("fields") or {}).get(wfo) or {}
+                snap_points = sample_nodes(snap_field, geoms[wfo], require_values=True)
+                # Align NDFD to the common geometry by nearest node.
+                ndfd = np.full(len(points), np.nan, dtype=float)
+                if snap_points:
+                    sla = np.array([p[0] for p in snap_points]); slo = np.array([p[1] for p in snap_points]); sv = np.array([p[2] for p in snap_points], dtype=float)
+                    for n,(lat,lon,_) in enumerate(points):
+                        d=(sla-lat)**2+((slo-lon)*math.cos(math.radians(lat)))**2
+                        ndfd[n]=sv[int(np.argmin(d))]
+            else:
+                ndfd = np.full(len(points), np.nan, dtype=float)
             try:
                 det = sample_grib(nbm_det, points)
                 pvals = {p: sample_grib(nbm_pct[p], points) for p in PERCENTILES if p in nbm_pct}
-                hourly = [sample_grib(g, points) for g in urma_hours]
+                hourly = [sample_grib(g, points) for g in rtma_hours]
                 obs = np.nanmin(np.vstack(hourly), axis=0)
             except Exception as exc:
                 errors.append(f"{valid_day} {wfo}: {exc}")
@@ -394,17 +424,17 @@ def main():
             "dailyBias": daily_bias,
             "ranking": ranking,
             "leadLabel": "12Z issue → following 12Z MinT",
-            "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly URMA 2-m temperature from 00Z–12Z.",
+            "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z.",
         }
 
     payload = {
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nbmVersion": "NBM v5.1",
         "element": "MinT",
-        "verification": "URMA",
+        "verification": "RTMA",
         "windowDays": 5,
         "issueCycle": "12Z",
-        "method": "Rolling CWA land MAE and mean bias versus URMA. NBM percentile ranking is diagnostic only.",
+        "method": "Rolling CWA land MAE and mean bias versus RTMA. NBM percentile ranking is diagnostic only.",
         "cwas": cwas,
         "errors": errors[-30:],
     }
