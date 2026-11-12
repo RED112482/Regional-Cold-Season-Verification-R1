@@ -118,7 +118,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand"><h1 id="appTitle">NWS Cold Season Verification and Forecast Tool</h1><p>County freeze-frequency + seasonal frost/freeze/cold product verification · GitHub Pages <span id="buildBadge" class="build">CHECKING…</span></p></div>
+    <div class="brand"><h1 id="appTitle">NWS Cold Season Verification and Forecast Tool</h1><p>County freeze-frequency + seasonal frost/freeze/cold product verification · GitHub Pages <span id="buildBadge" class="build">R13-NBM-VERIFY-HOTFIX</span></p></div>
     <div class="global-controls">
       <div class="field"><label>Cold season</label><select id="seasonSelect"></select></div>
       <div class="field"><label>Observation set</label><select id="stationMode"><option value="all">All IEM METAR sites</option><option value="asosawos">ASOS / AWOS only</option></select></div>
@@ -307,27 +307,27 @@
       </div>
     </div>
   </div>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
 const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,verifyCwa:'MOB',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
 const PRODUCT_STYLE={
  'Frost Advisory':{color:'#6495ed'},'Freeze Watch':{color:'#00ffff'},'Freeze Warning':{color:'#483d8b'},'Cold Weather Advisory':{color:'#afeeee'},'Extreme Cold Watch':{color:'#5f9ea0'},'Extreme Cold Warning':{color:'#0000ff'},'Legacy Wind Chill':{color:'#8a6cff'},'Legacy Hard Freeze':{color:'#5540a5'}
 };
-document.addEventListener('DOMContentLoaded',()=>waitForLeaflet(0));
-function waitForLeaflet(n){if(window.L)return initialize();if(n<50)return setTimeout(()=>waitForLeaflet(n+1),100);alert('Leaflet failed to load.');}
+document.addEventListener('DOMContentLoaded',initialize);
+function waitForLeaflet(n){if(window.L)return Promise.resolve(true);if(n<60)return new Promise(resolve=>setTimeout(()=>resolve(waitForLeaflet(n+1)),100));return Promise.resolve(false)}
 async function initialize(){
-  setStatus('frequency','Loading viewer configuration…');
   try{
     const response=await fetch('./data/config.json',{cache:'no-store'});
     if(!response.ok)throw new Error('Configuration HTTP '+response.status);
     const config=await response.json();
-    setup(config);
+    await setup(config);
   }catch(e){
-    setStatus('frequency','Could not load GitHub Pages configuration: '+err(e),true);
+    const badge=document.getElementById('buildBadge');if(badge)badge.textContent='CONFIG ERROR';
+    const status=document.getElementById('status1');if(status){status.textContent='Could not load GitHub Pages configuration: '+err(e);status.classList.add('show','error')}
   }
 }
-function setup(config){if(!config||config.buildId!=='REGIONAL-COLD-SEASON-GITHUB-R13-NBM-VERIFY-HOTFIX')return alert('Build mismatch. Expected REGIONAL-COLD-SEASON-GITHUB-R13-NBM-VERIFY-HOTFIX.');state.config=config;state.cwaFilter='MOB';state.productCwa='MOB';document.getElementById('appTitle').textContent=config.appTitle;document.getElementById('buildBadge').textContent=config.buildId;document.getElementById('seasonSelect').innerHTML=(config.seasonOptions||[]).map(o=>'<option value="'+o.value+'">'+esc(o.label)+'</option>').join('');document.getElementById('seasonSelect').value=String(config.defaultSeasonStartYear);document.getElementById('stationMode').value=config.defaultStationMode;createMaps();wire();wireInfoDock();buildCwaChips();buildProductCwaChips();buildForecastCwaChips();buildFrostCwaChips();buildVerifyCwaChips();buildForecastProductFilters();buildProductFilters();loadStationCatalog();loadForecastData();loadVerificationData();const b=document.getElementById('loadBtn');b.disabled=false;b.textContent='LOAD SEASON';setStatus('frequency','Viewer ready. Loading the current cold season…',false,1800);setTimeout(loadSeason,120);}
+async function setup(config){if(!config||config.buildId!=='REGIONAL-COLD-SEASON-GITHUB-R13-NBM-VERIFY-HOTFIX'){const badge=document.getElementById('buildBadge');if(badge)badge.textContent='BUILD MISMATCH';return}state.config=config;state.cwaFilter='MOB';state.productCwa='MOB';document.getElementById('appTitle').textContent=config.appTitle;document.getElementById('buildBadge').textContent=config.buildId;document.getElementById('seasonSelect').innerHTML=(config.seasonOptions||[]).map(o=>'<option value="'+o.value+'">'+esc(o.label)+'</option>').join('');document.getElementById('seasonSelect').value=String(config.defaultSeasonStartYear);document.getElementById('stationMode').value=config.defaultStationMode;const leafletReady=await waitForLeaflet(0);if(!leafletReady){const badge=document.getElementById('buildBadge');if(badge)badge.textContent=config.buildId+' · MAP LIBRARY ERROR';const status=document.getElementById('status1');if(status){status.textContent='Leaflet map library could not load. Non-map tabs may still be used after reload.';status.classList.add('show','error')}return}createMaps();wire();wireInfoDock();buildCwaChips();buildProductCwaChips();buildForecastCwaChips();buildFrostCwaChips();buildVerifyCwaChips();buildForecastProductFilters();buildProductFilters();loadStationCatalog();loadForecastData();loadVerificationData();const b=document.getElementById('loadBtn');b.disabled=false;b.textContent='LOAD SEASON';setStatus('frequency','Viewer ready. Loading the current cold season…',false,1800);setTimeout(loadSeason,120);}
 async function loadStationCatalog(){try{const r=await fetch('./data/stations.json',{cache:'no-store'});if(r.ok){const p=await r.json();state.stationCatalog=p}}catch(e){console.warn('Station catalog unavailable',e)}}
 function wireInfoDock(){const tabs=[...document.querySelectorAll('.info-tab')],panel=document.getElementById('infoPanel'),contents=[...document.querySelectorAll('.info-content')];tabs.forEach(btn=>btn.addEventListener('click',()=>{const key=btn.dataset.info,was=btn.classList.contains('active');tabs.forEach(x=>x.classList.remove('active'));contents.forEach(x=>x.classList.remove('active'));if(was){panel.classList.remove('open');return}btn.classList.add('active');const content=document.querySelector('[data-info-content="'+key+'"]');if(content)content.classList.add('active');panel.classList.add('open')}))}
 function createMaps(){state.frequencyMap=L.map('frequencyMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);state.productsMap=L.map('productsMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);state.forecastMap=L.map('forecastMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);state.frostMap=L.map('frostMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);[state.frequencyMap,state.productsMap,state.forecastMap,state.frostMap].forEach(map=>{L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,className:'gray-road-tiles',attribution:'&copy; OpenStreetMap contributors'}).addTo(map)});state.freqLabelLayer=L.layerGroup().addTo(state.frequencyMap);state.freqStationLayer=L.layerGroup().addTo(state.frequencyMap);state.verificationLayer=L.layerGroup().addTo(state.productsMap);state.forecastLabelLayer=L.layerGroup().addTo(state.forecastMap);state.forecastContourLayer=L.layerGroup().addTo(state.forecastMap);addFrequencyLegend();addProductLegend();addForecastTempLegend();addFrostLegend();}
