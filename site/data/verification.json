@@ -1,0 +1,11 @@
+{
+  "generatedUtc": "2026-11-12T07:47:54.510Z",
+  "nbmVersion": "NBM v5.1",
+  "element": "MinT",
+  "verification": "URMA",
+  "windowDays": 5,
+  "issueCycle": "12Z",
+  "status": "Verification workflow is initializing; no completed 5-day dataset has been committed yet.",
+  "method": "Rolling CWA land MAE and mean bias versus URMA. NBM percentile ranking is diagnostic only.",
+  "cwas": {}
+}
