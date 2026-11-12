@@ -40,6 +40,11 @@ The viewer is designed around four tabs:
 - Patchy / Areas / Widespread guidance categories use a UK-style weighted screening method.
 - County product screening uses approximately 50% areal coverage from raw NDFD field samples; display smoothing is not used for qualification.
 
+### NBM Verification Trends
+- Rolling five-night MinT verification over CWA land points.
+- NDFD and NBM deterministic/percentile guidance are compared against URMA.
+- Displays daily MAE, five-day mean bias, and ranks P10/P25/P50/P75/P90 by five-day MAE.
+
 ### Supplemental verification
 - Exact-window ASOS/AWOS/METAR remains the primary point-verification score.
 - NWS COOP 24-hour lows are added as distinctly labeled supplemental support points and do not change the primary hit/miss percentage.
@@ -110,4 +115,4 @@ The data builder deliberately makes IEM daily-summary requests sequentially and 
 
 ## Build
 
-Current viewer build: **REGIONAL-COLD-SEASON-GITHUB-R11-FROST-COVERAGE**
+Current viewer build: **REGIONAL-COLD-SEASON-GITHUB-R13-NBM-VERIFY**
