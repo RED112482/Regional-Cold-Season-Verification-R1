@@ -1,11 +1,11 @@
 {
-  "generatedUtc": "2026-11-12T08:11:18Z",
+  "generatedUtc": "2026-11-12T08:35:49Z",
   "nbmVersion": "NBM v5.1",
   "element": "MinT",
   "verification": "RTMA",
   "windowDays": 5,
   "issueCycle": "12Z",
-  "method": "Rolling CWA land MAE and mean bias versus RTMA. NBM percentile ranking is diagnostic only.",
+  "method": "Rolling CWA land MAE and mean bias versus RTMA using NOAA archived NDFD and NBM guidance. NBM percentile ranking is diagnostic only.",
   "cwas": {
     "MOB": {
       "dates": [
@@ -17,11 +17,11 @@
       ],
       "dailyMae": {
         "NDFD": [
-          null,
-          null,
-          null,
-          1.8351125827814896,
-          1.355271523178828
+          2.802635761589394,
+          4.671536423841064,
+          4.584039735099333,
+          2.847337748344376,
+          3.4927152317880727
         ],
         "NBM Deterministic": [
           2.227112582781448,
@@ -68,11 +68,11 @@
       },
       "dailyBias": {
         "NDFD": [
-          null,
-          null,
-          null,
-          -1.484225165562967,
-          -0.6347682119205821
+          -2.1334172185430322,
+          3.3001986754967088,
+          1.1821589403973645,
+          0.9708079470198868,
+          -3.2447682119205217
         ],
         "NBM Deterministic": [
           -1.3359337748344267,
@@ -120,9 +120,9 @@
       "ranking": [
         {
           "source": "NDFD",
-          "mae": 1.595,
-          "bias": -1.059,
-          "samples": 302
+          "mae": 3.68,
+          "bias": 0.015,
+          "samples": 755
         },
         {
           "source": "NBM Deterministic",
@@ -162,7 +162,7 @@
         }
       ],
       "leadLabel": "12Z issue → following 12Z MinT",
-      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
+      "method": "CWA land-only sample nodes; archived NOAA NDFD and NBM are compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "LIX": {
       "dates": [
@@ -174,11 +174,11 @@
       ],
       "dailyMae": {
         "NDFD": [
-          null,
-          null,
-          null,
-          2.8588793103448684,
-          4.522620689655222
+          3.482068965517222,
+          4.335982758620701,
+          3.324258620689657,
+          2.0443965517241347,
+          6.283241379310325
         ],
         "NBM Deterministic": [
           3.9593793103448123,
@@ -225,11 +225,11 @@
       },
       "dailyBias": {
         "NDFD": [
-          null,
-          null,
-          null,
-          -2.229051724137979,
-          -4.446000000000051
+          -3.4454482758620473,
+          4.1178103448276016,
+          2.457775862068979,
+          -0.9954310344827297,
+          -6.245999999999981
         ],
         "NBM Deterministic": [
           -3.8597586206896377,
@@ -277,9 +277,9 @@
       "ranking": [
         {
           "source": "NDFD",
-          "mae": 3.691,
-          "bias": -3.338,
-          "samples": 232
+          "mae": 3.894,
+          "bias": -0.822,
+          "samples": 580
         },
         {
           "source": "NBM Deterministic",
@@ -319,7 +319,7 @@
         }
       ],
       "leadLabel": "12Z issue → following 12Z MinT",
-      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
+      "method": "CWA land-only sample nodes; archived NOAA NDFD and NBM are compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "JAN": {
       "dates": [
@@ -331,11 +331,11 @@
       ],
       "dailyMae": {
         "NDFD": [
-          null,
-          null,
-          null,
-          3.4373652694611203,
-          1.939976047904221
+          2.2743592814371283,
+          6.789880239520974,
+          6.787940119760476,
+          4.806646706586831,
+          2.107508982035921
         ],
         "NBM Deterministic": [
           3.289904191616764,
@@ -382,11 +382,11 @@
       },
       "dailyBias": {
         "NDFD": [
-          null,
-          null,
-          null,
-          -3.194586826347361,
-          -1.5804550898204108
+          -1.500682634730529,
+          6.426000000000018,
+          5.442790419161685,
+          2.181880239520975,
+          -1.6595568862275307
         ],
         "NBM Deterministic": [
           -1.383197604790416,
@@ -434,9 +434,9 @@
       "ranking": [
         {
           "source": "NDFD",
-          "mae": 2.689,
-          "bias": -2.388,
-          "samples": 334
+          "mae": 4.553,
+          "bias": 2.178,
+          "samples": 835
         },
         {
           "source": "NBM Deterministic",
@@ -476,7 +476,7 @@
         }
       ],
       "leadLabel": "12Z issue → following 12Z MinT",
-      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
+      "method": "CWA land-only sample nodes; archived NOAA NDFD and NBM are compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "BMX": {
       "dates": [
@@ -488,11 +488,11 @@
       ],
       "dailyMae": {
         "NDFD": [
-          null,
-          null,
-          null,
-          1.3329935483870872,
-          2.0258709677419047
+          2.4918967741935383,
+          2.954322580645165,
+          3.8946193548387145,
+          2.906477419354843,
+          2.0269161290322555
         ],
         "NBM Deterministic": [
           2.9162322580645137,
@@ -539,11 +539,11 @@
       },
       "dailyBias": {
         "NDFD": [
-          null,
-          null,
-          null,
-          0.3995999999999447,
-          1.8050451612902751
+          -2.080103225806436,
+          1.2746322580645366,
+          2.6204516129032447,
+          1.494116129032267,
+          0.19091612903228025
         ],
         "NBM Deterministic": [
           -0.7631999999999939,
@@ -591,9 +591,9 @@
       "ranking": [
         {
           "source": "NDFD",
-          "mae": 1.679,
-          "bias": 1.102,
-          "samples": 310
+          "mae": 2.855,
+          "bias": 0.7,
+          "samples": 775
         },
         {
           "source": "NBM Deterministic",
@@ -633,7 +633,7 @@
         }
       ],
       "leadLabel": "12Z issue → following 12Z MinT",
-      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
+      "method": "CWA land-only sample nodes; archived NOAA NDFD and NBM are compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "TAE": {
       "dates": [
@@ -645,11 +645,11 @@
       ],
       "dailyMae": {
         "NDFD": [
-          null,
-          null,
-          null,
-          1.9112380952380708,
-          2.158802721088392
+          1.5249795918367357,
+          1.5145714285714242,
+          1.271999999999991,
+          1.8383265306122483,
+          2.199061224489808
         ],
         "NBM Deterministic": [
           3.3759183673469346,
@@ -696,11 +696,11 @@
       },
       "dailyBias": {
         "NDFD": [
-          null,
-          null,
-          null,
-          1.2576870748298772,
-          2.0245442176870205
+          -1.251673469387744,
+          -0.6885306122448814,
+          -0.13102040816324953,
+          1.2728571428571558,
+          0.8646122448979774
         ],
         "NBM Deterministic": [
           1.5793469387755148,
@@ -748,9 +748,9 @@
       "ranking": [
         {
           "source": "NDFD",
-          "mae": 2.035,
-          "bias": 1.641,
-          "samples": 294
+          "mae": 1.67,
+          "bias": 0.013,
+          "samples": 735
         },
         {
           "source": "NBM Deterministic",
@@ -790,7 +790,7 @@
         }
       ],
       "leadLabel": "12Z issue → following 12Z MinT",
-      "method": "CWA land-only raw NDFD sample nodes; NDFD and NBM compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
+      "method": "CWA land-only sample nodes; archived NOAA NDFD and NBM are compared with the minimum hourly RTMA 2-m temperature from 00Z–12Z."
     }
   },
   "errors": []
