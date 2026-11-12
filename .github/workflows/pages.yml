@@ -7,6 +7,7 @@ on:
       - "site/index.html"
       - "site/.nojekyll"
       - "site/data/forecast.json"
+      - "site/data/verification.json"
       - "scripts/**"
       - ".github/workflows/pages.yml"
       - "README.md"
@@ -98,12 +99,18 @@ jobs:
           if [ -f site/data/forecast.json ]; then
             cp site/data/forecast.json /tmp/latest-forecast.json
           fi
+          if [ -f site/data/verification.json ]; then
+            cp site/data/verification.json /tmp/latest-verification.json
+          fi
 
           rm -rf site/data
           mkdir -p site/data
           cp -a /tmp/cold-season-data/. site/data/
           if [ -f /tmp/latest-forecast.json ]; then
             cp /tmp/latest-forecast.json site/data/forecast.json
+          fi
+          if [ -f /tmp/latest-verification.json ]; then
+            cp /tmp/latest-verification.json site/data/verification.json
           fi
           git add site/data
 
