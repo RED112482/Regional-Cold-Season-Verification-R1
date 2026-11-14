@@ -112,6 +112,9 @@
     .verify-rank-num{font-size:17px;font-weight:800;color:var(--ice);text-align:center}.verify-rank-name{font-size:10px;font-weight:800}.verify-rank-sub{font-size:8px;color:#91a8bd;margin-top:2px}.verify-rank-val{font-size:14px;font-weight:800}
     .verify-method{font-size:9px;line-height:1.5;color:#a9bdd0}.verify-method b{color:#fff}
     .verify-legend-note{font-size:9px;color:#9fb4c9;margin-top:8px}
+    .verify-perf-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:9px;color:#b9cada}
+    .verify-perf-bar{width:180px;height:10px;border-radius:999px;background:linear-gradient(90deg,#1479ff 0%,#16c9ff 24%,#f3e24f 50%,#ff8b2c 74%,#e72f2f 100%);box-shadow:0 0 8px rgba(22,201,255,.25)}
+    .verify-perf-label{font-weight:800;color:#e7f3ff}
     @media(max-width:950px){.verify-grid{grid-template-columns:1fr}.verify-summary{grid-template-columns:1fr 1fr}}
   </style>
 </head>
@@ -265,6 +268,7 @@
             <div class="section-title">CWA Land MAE vs RTMA · Lower is Better</div>
             <div class="verify-chart-wrap"><canvas id="verificationChart"></canvas></div>
             <div id="verifyChartNote" class="verify-legend-note">Actual daily MAE is plotted. Line color reflects rolling performance; NDFD is emphasized with a glow.</div>
+            <div class="verify-perf-legend"><span class="verify-perf-label">Best</span><span class="verify-perf-bar"></span><span class="verify-perf-label">Worst</span><span>Blue = lowest rolling MAE · Red = highest rolling MAE</span></div>
           </div>
         </div>
         <div class="verify-side">
@@ -401,15 +405,31 @@ async function renderVerification(){
   document.getElementById('verifyUpdated').textContent='Last '+(root.dates||[]).length+' completed nights · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
 
   function perfColor(mae,alpha=1){
-    if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(80,220,160,'+alpha+')';
+    if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(20,121,255,'+alpha+')';
     const t=Math.max(0,Math.min(1,(mae-bestMae)/(worstMae-bestMae)));
-    const r=Math.round(55+190*t),g=Math.round(220-120*t),b=Math.round(135-55*t);
-    return 'rgba('+r+','+g+','+b+','+alpha+')';
+    const stops=[
+      [0.00,[20,121,255]],
+      [0.24,[22,201,255]],
+      [0.50,[243,226,79]],
+      [0.74,[255,139,44]],
+      [1.00,[231,47,47]]
+    ];
+    for(let i=0;i<stops.length-1;i++){
+      const a=stops[i],b=stops[i+1];
+      if(t>=a[0]&&t<=b[0]){
+        const q=(t-a[0])/(b[0]-a[0]);
+        const r=Math.round(a[1][0]+(b[1][0]-a[1][0])*q);
+        const g=Math.round(a[1][1]+(b[1][1]-a[1][1])*q);
+        const bl=Math.round(a[1][2]+(b[1][2]-a[1][2])*q);
+        return 'rgba('+r+','+g+','+bl+','+alpha+')';
+      }
+    }
+    return 'rgba(231,47,47,'+alpha+')';
   }
 
   document.getElementById('verifyRanking').innerHTML=ranking.map((r,i)=>{
     const c=perfColor(num(r.mae),1),nd=r.source==='NDFD';
-    return '<div class="verify-rank-row" style="border-color:'+c+';box-shadow:'+(nd?'0 0 12px rgba(85,190,255,.6)':'none')+'"><div class="verify-rank-num">'+(i+1)+'</div><div><div class="verify-rank-name">'+esc(verifySourceLabel(r.source))+(nd?' · NDFD':'')+'</div><div class="verify-rank-sub">Bias '+(isNum(num(r.bias))?(num(r.bias)>=0?'+':'')+num(r.bias).toFixed(2)+'°F':'—')+' · '+(r.samples||0)+' samples</div></div><div class="verify-rank-val" style="color:'+c+'">'+(isNum(num(r.mae))?num(r.mae).toFixed(2)+'°':'—')+'</div></div>';
+    const perf=i===0?'BEST':i===ranking.length-1?'WORST':'#'+(i+1);return '<div class="verify-rank-row" style="border-color:'+c+';box-shadow:'+(nd?'0 0 14px rgba(85,190,255,.75)':'0 0 6px '+c.replace('1)', '.25)'))+'"><div class="verify-rank-num" style="color:'+c+'">'+perf+'</div><div><div class="verify-rank-name">'+esc(verifySourceLabel(r.source))+(nd?' · NDFD':'')+'</div><div class="verify-rank-sub">Bias '+(isNum(num(r.bias))?(num(r.bias)>=0?'+':'')+num(r.bias).toFixed(2)+'°F':'—')+' · '+(r.samples||0)+' samples</div></div><div class="verify-rank-val" style="color:'+c+'">'+(isNum(num(r.mae))?num(r.mae).toFixed(2)+'°':'—')+'</div></div>';
   }).join('');
 
   document.getElementById('verifyBias').innerHTML=ranking.map(r=>'<div class="guidance-row"><div class="topline"><span>'+esc(verifySourceLabel(r.source))+'</span><span>'+((num(r.bias)>=0?'+':'')+fmt(num(r.bias))+'°F')+'</span></div><div class="subline">Rolling mean signed error · positive = too warm</div></div>').join('');
@@ -420,21 +440,21 @@ async function renderVerification(){
         rankMap=new Map(ranking.map(r=>[r.source,r]));
 
   const datasets=order.filter(k=>Array.isArray(mae[k])).map(k=>{
-    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',c=ndfdLine?'rgba(70,190,255,1)':perfColor(m,.95);
+    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',c=perfColor(m,1);
     return{
       label:verifySourceLabel(k)+(ndfdLine?' ★':''),
       data:mae[k],
       _bias:(root.dailyBias||{})[k]||[],
       tension:.25,
       spanGaps:true,
-      pointRadius:ndfdLine?5:3.2,
-      pointHoverRadius:ndfdLine?7:5,
-      borderWidth:ndfdLine?4.5:2.4,
+      pointRadius:ndfdLine?5.5:4,
+      pointHoverRadius:ndfdLine?8:6,
+      borderWidth:ndfdLine?5:3.2,
       borderColor:c,
       backgroundColor:c,
       pointBackgroundColor:c,
-      pointBorderColor:ndfdLine?'rgba(220,250,255,1)':c,
-      pointBorderWidth:ndfdLine?2:1
+      pointBorderColor:ndfdLine?'rgba(220,250,255,1)':'rgba(10,20,30,.85)',
+      pointBorderWidth:ndfdLine?2.4:1.4
     };
   });
 
@@ -489,7 +509,7 @@ async function renderVerification(){
       }
     });
   }
-  document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Greener lines have lower rolling MAE; warmer colors indicate poorer recent performance. NDFD is shown with a blue glow. '+(root.leadLabel||'');
+  document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Blue = best rolling performance, red = worst. NDFD keeps an additional glow/outline so it remains easy to track. '+(root.leadLabel||'');
 }
 
 async function loadSeason(){
