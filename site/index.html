@@ -108,12 +108,12 @@
     .verify-chart-card{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:12px;min-height:420px}
     .verify-chart-wrap{position:relative;height:350px;margin-top:8px}.verify-chart-wrap canvas{width:100%!important;height:100%!important}
     .verify-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px}
-    .verify-summary .card strong{font-size:20px}.verify-rank{display:grid;gap:6px}.verify-rank-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border:1px solid #2f4862;background:#091522;border-radius:8px}
-    .verify-rank-num{font-size:17px;font-weight:800;color:var(--ice);text-align:center}.verify-rank-name{font-size:10px;font-weight:800}.verify-rank-sub{font-size:8px;color:#91a8bd;margin-top:2px}.verify-rank-val{font-size:14px;font-weight:800}
+    .verify-summary .card strong{font-size:20px}.verify-rank{display:grid;gap:6px}.verify-rank-row{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border:1px solid #2f4862;background:#091522;border-radius:8px}
+    .verify-rank-num{font-size:15px;font-weight:800;color:var(--ice);text-align:left;white-space:nowrap}.verify-rank-name{font-size:10px;font-weight:800}.verify-rank-sub{font-size:8px;color:#91a8bd;margin-top:2px}.verify-rank-val{font-size:14px;font-weight:800}
     .verify-method{font-size:9px;line-height:1.5;color:#a9bdd0}.verify-method b{color:#fff}
     .verify-legend-note{font-size:9px;color:#9fb4c9;margin-top:8px}
     .verify-perf-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:9px;color:#b9cada}
-    .verify-perf-bar{width:180px;height:10px;border-radius:999px;background:linear-gradient(90deg,#1479ff 0%,#16c9ff 24%,#f3e24f 50%,#ff8b2c 74%,#e72f2f 100%);box-shadow:0 0 8px rgba(22,201,255,.25)}
+    .verify-perf-bar{width:180px;height:10px;border-radius:999px;background:linear-gradient(90deg,#28d17c 0%,#9bd84a 28%,#f3df4e 52%,#ff9a38 76%,#e74343 100%);box-shadow:0 0 8px rgba(22,201,255,.25)}
     .verify-perf-label{font-weight:800;color:#e7f3ff}
     @media(max-width:950px){.verify-grid{grid-template-columns:1fr}.verify-summary{grid-template-columns:1fr 1fr}}
   </style>
@@ -268,7 +268,7 @@
             <div class="section-title">CWA Land MAE vs RTMA · Lower is Better</div>
             <div class="verify-chart-wrap"><canvas id="verificationChart"></canvas></div>
             <div id="verifyChartNote" class="verify-legend-note">Actual daily MAE is plotted. Line color reflects rolling performance; NDFD is emphasized with a glow.</div>
-            <div class="verify-perf-legend"><span class="verify-perf-label">Best</span><span class="verify-perf-bar"></span><span class="verify-perf-label">Worst</span><span>Blue = lowest rolling MAE · Red = highest rolling MAE</span></div>
+            <div class="verify-perf-legend"><span class="verify-perf-label">Best</span><span class="verify-perf-bar"></span><span class="verify-perf-label">Worst</span><span>Green = lowest rolling MAE · Red = highest rolling MAE</span></div>
           </div>
         </div>
         <div class="verify-side">
@@ -405,14 +405,14 @@ async function renderVerification(){
   document.getElementById('verifyUpdated').textContent='Last '+(root.dates||[]).length+' completed nights · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
 
   function perfColor(mae,alpha=1){
-    if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(20,121,255,'+alpha+')';
+    if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(40,209,124,'+alpha+')';
     const t=Math.max(0,Math.min(1,(mae-bestMae)/(worstMae-bestMae)));
     const stops=[
-      [0.00,[20,121,255]],
-      [0.24,[22,201,255]],
-      [0.50,[243,226,79]],
-      [0.74,[255,139,44]],
-      [1.00,[231,47,47]]
+      [0.00,[40,209,124]],
+      [0.28,[155,216,74]],
+      [0.52,[243,223,78]],
+      [0.76,[255,154,56]],
+      [1.00,[231,67,67]]
     ];
     for(let i=0;i<stops.length-1;i++){
       const a=stops[i],b=stops[i+1];
@@ -509,7 +509,7 @@ async function renderVerification(){
       }
     });
   }
-  document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Blue = best rolling performance, red = worst. NDFD keeps an additional glow/outline so it remains easy to track. '+(root.leadLabel||'');
+  document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Green = best rolling performance, red = worst. NDFD keeps an additional glow/outline so it remains easy to track. '+(root.leadLabel||'');
 }
 
 async function loadSeason(){
