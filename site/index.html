@@ -174,7 +174,7 @@
           <label class="toggle"><input id="showCoopSupplement" type="checkbox" checked> COOP daily lows</label>
           <label class="toggle"><input id="showRwisSupplement" type="checkbox" checked> RWIS exact-window</label>
           <label class="toggle"><input id="showUscrnSupplement" type="checkbox" checked> USCRN exact-window</label>
-        </div><div id="pointSourceSummary" class="small" style="margin:5px 0 8px;color:#9fc5d9;font-weight:700">METAR 0 · COOP 0 · RWIS 0 · USCRN 0</div><div class="product-summary"><div class="card"><span>Points sampled</span><strong id="eventCountyCount">—</strong></div><div class="card"><span>Met criterion</span><strong id="eventHitCount">—</strong></div></div><div id="pointList" class="point-list"></div><div class="point-note">Primary verification uses IEM ASOS/AWOS/METAR observations inside the exact VTEC valid period. COOP, RWIS and USCRN are supplemental and do not change the primary METAR hit/miss percentage. COOP uses a 24-hour low; RWIS/USCRN use the exact VTEC window when available. Frost is a temperature-support screen, not direct frost observation.</div></div>
+        </div><div id="pointSourceSummary" class="small" style="margin:5px 0 8px;color:#9fc5d9;font-weight:700">METAR 0 · COOP 0 · RWIS 0 · USCRN 0</div><div class="product-summary"><div class="card"><span>Points sampled</span><strong id="eventCountyCount">—</strong></div><div class="card"><span>Met criterion</span><strong id="eventHitCount">—</strong></div></div><div id="pointList" class="point-list"></div><div class="point-note">Primary verification uses IEM ASOS/AWOS/METAR observations inside the exact VTEC valid period. COOP, RWIS and USCRN are supplemental and do not change the primary METAR hit/miss percentage. COOP uses a 24-hour low; RWIS/USCRN use the exact VTEC window when available. Frost Advisory verification uses observed-condition PotFrost from METAR temperature, dewpoint, wind and cloud cover; only Areas/Widespread (≥40) counts as a hit.</div></div>
       <div id="warningBox2" class="warning"></div>
     </aside>
     <div class="map-wrap"><div id="productsMap" class="map"></div><div id="status2" class="status"></div></div>
@@ -293,12 +293,12 @@
       <div class="info-content" data-info-content="counter">
         <h3>What the county number means</h3>
         <p>Each number is the <b>number of Sep–May days</b> the selected threshold was reached. The coldest selected IEM observation in the county represents that day. Counties with no station use the nearest regional station and are flagged when clicked.</p>
-        <p>Frost is a <b>temperature-support screen</b>; frost itself is not directly observed by ASOS/AWOS.</p>
+        <p>Frost Advisory verification uses the observed-condition PotFrost method from METAR T/Td, wind and cloud cover. Patchy (20) does not verify; Areas (40) or Widespread (70) does.</p>
       </div>
       <div class="info-content" data-info-content="criteria">
         <h3>Cold criteria</h3>
         <div class="criteria-mini">
-          <div><strong>Frost</strong>≤37°F temperature-support screen</div>
+          <div><strong>Frost</strong>Observed PotFrost ≥40 · Areas/Widespread</div>
           <div><strong>Freeze</strong>≤32°F</div>
           <div><strong>Cold Advisory</strong>County local apparent/air-temperature threshold</div>
           <div><strong>Extreme Cold</strong>County local warning threshold</div>
