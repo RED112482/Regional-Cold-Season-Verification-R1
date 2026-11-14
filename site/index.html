@@ -252,7 +252,7 @@
     <div class="verify-shell">
       <div class="verify-head">
         <div class="section" style="min-width:330px"><div class="section-title">Forecast Office · Land Only</div><div id="verifyCwaChips" class="verify-cwas"></div></div>
-        <div class="section" style="flex:1;min-width:300px"><div class="section-title">Rolling Verification</div><div id="verifyUpdated" class="forecast-updated">Loading 5-day verification…</div><div class="small">MinT · 12Z-issued forecast valid the following 12Z · verifying analysis: RTMA · 1 = best</div></div>
+        <div class="section" style="flex:1;min-width:300px"><div class="section-title">Rolling Verification</div><div id="verifyUpdated" class="forecast-updated">Loading 5-day verification…</div><div class="small">MinT · 12Z-issued forecast valid the following 12Z · verifying analysis: RTMA</div></div>
       </div>
       <div class="verify-grid">
         <div class="verify-main">
@@ -262,9 +262,9 @@
             <div class="card"><span>NDFD 5-day MAE</span><strong id="verifyNdfdMae">—</strong></div>
           </div>
           <div class="verify-chart-card">
-            <div class="section-title">CWA Land Verification Rank vs RTMA · Lower is Better</div>
+            <div class="section-title">CWA Land MAE vs RTMA · Lower is Better</div>
             <div class="verify-chart-wrap"><canvas id="verificationChart"></canvas></div>
-            <div id="verifyChartNote" class="verify-legend-note">Daily rank among NDFD, NBM deterministic, and selected NBM percentiles. Hover shows the actual MAE.</div>
+            <div id="verifyChartNote" class="verify-legend-note">Actual daily MAE is plotted. Line color reflects rolling performance; NDFD is emphasized with a glow.</div>
           </div>
         </div>
         <div class="verify-side">
@@ -387,36 +387,74 @@ async function renderVerification(){
     if(state.verificationChart){state.verificationChart.destroy();state.verificationChart=null}
     return;
   }
+
   const ranking=(root.ranking||[]).slice().sort((a,b)=>(a.mae??999)-(b.mae??999)),
         pct=ranking.find(x=>/^P\d+/.test(x.source)),
-        ndfd=ranking.find(x=>x.source==='NDFD');
+        ndfd=ranking.find(x=>x.source==='NDFD'),
+        validMae=ranking.map(r=>num(r.mae)).filter(isNum),
+        bestMae=validMae.length?Math.min(...validMae):null,
+        worstMae=validMae.length?Math.max(...validMae):null;
+
   document.getElementById('verifyBest').textContent=pct?pct.source:'—';
   document.getElementById('verifyBestMae').textContent=pct&&isNum(num(pct.mae))?num(pct.mae).toFixed(2)+'°F':'—';
   document.getElementById('verifyNdfdMae').textContent=ndfd&&isNum(num(ndfd.mae))?num(ndfd.mae).toFixed(2)+'°F':'—';
   document.getElementById('verifyUpdated').textContent='Last '+(root.dates||[]).length+' completed nights · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
-  document.getElementById('verifyRanking').innerHTML=ranking.map((r,i)=>'<div class="verify-rank-row"><div class="verify-rank-num">'+(i+1)+'</div><div><div class="verify-rank-name">'+esc(verifySourceLabel(r.source))+'</div><div class="verify-rank-sub">Bias '+(isNum(num(r.bias))?(num(r.bias)>=0?'+':'')+num(r.bias).toFixed(2)+'°F':'—')+' · '+(r.samples||0)+' samples</div></div><div class="verify-rank-val">'+(isNum(num(r.mae))?num(r.mae).toFixed(2)+'°':'—')+'</div></div>').join('');
+
+  function perfColor(mae,alpha=1){
+    if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(80,220,160,'+alpha+')';
+    const t=Math.max(0,Math.min(1,(mae-bestMae)/(worstMae-bestMae)));
+    const r=Math.round(55+190*t),g=Math.round(220-120*t),b=Math.round(135-55*t);
+    return 'rgba('+r+','+g+','+b+','+alpha+')';
+  }
+
+  document.getElementById('verifyRanking').innerHTML=ranking.map((r,i)=>{
+    const c=perfColor(num(r.mae),1),nd=r.source==='NDFD';
+    return '<div class="verify-rank-row" style="border-color:'+c+';box-shadow:'+(nd?'0 0 12px rgba(85,190,255,.6)':'none')+'"><div class="verify-rank-num">'+(i+1)+'</div><div><div class="verify-rank-name">'+esc(verifySourceLabel(r.source))+(nd?' · NDFD':'')+'</div><div class="verify-rank-sub">Bias '+(isNum(num(r.bias))?(num(r.bias)>=0?'+':'')+num(r.bias).toFixed(2)+'°F':'—')+' · '+(r.samples||0)+' samples</div></div><div class="verify-rank-val" style="color:'+c+'">'+(isNum(num(r.mae))?num(r.mae).toFixed(2)+'°':'—')+'</div></div>';
+  }).join('');
+
   document.getElementById('verifyBias').innerHTML=ranking.map(r=>'<div class="guidance-row"><div class="topline"><span>'+esc(verifySourceLabel(r.source))+'</span><span>'+((num(r.bias)>=0?'+':'')+fmt(num(r.bias))+'°F')+'</span></div><div class="subline">Rolling mean signed error · positive = too warm</div></div>').join('');
 
   const labels=(root.dates||[]).map(d=>formatShortDate(d)),
         order=verifySourceOrder(),
         mae=root.dailyMae||{},
-        dailyRanks={};
+        rankMap=new Map(ranking.map(r=>[r.source,r]));
 
-  order.forEach(k=>dailyRanks[k]=new Array(labels.length).fill(null));
-  for(let i=0;i<labels.length;i++){
-    const vals=order.map(k=>({k,v:Array.isArray(mae[k])?num(mae[k][i]):null})).filter(x=>isNum(x.v)).sort((x,y)=>x.v-y.v);
-    vals.forEach((x,j)=>dailyRanks[x.k][i]=j+1);
-  }
+  const datasets=order.filter(k=>Array.isArray(mae[k])).map(k=>{
+    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',c=ndfdLine?'rgba(70,190,255,1)':perfColor(m,.95);
+    return{
+      label:verifySourceLabel(k)+(ndfdLine?' ★':''),
+      data:mae[k],
+      _bias:(root.dailyBias||{})[k]||[],
+      tension:.25,
+      spanGaps:true,
+      pointRadius:ndfdLine?5:3.2,
+      pointHoverRadius:ndfdLine?7:5,
+      borderWidth:ndfdLine?4.5:2.4,
+      borderColor:c,
+      backgroundColor:c,
+      pointBackgroundColor:c,
+      pointBorderColor:ndfdLine?'rgba(220,250,255,1)':c,
+      pointBorderWidth:ndfdLine?2:1
+    };
+  });
 
-  const datasets=order.filter(k=>Array.isArray(mae[k])).map(k=>({
-    label:verifySourceLabel(k),
-    data:dailyRanks[k],
-    _mae:mae[k],
-    tension:.25,
-    spanGaps:true,
-    pointRadius:3,
-    borderWidth:k==='NDFD'||k==='NBM Deterministic'?3:1.8
-  }));
+  const ndfdGlowPlugin={
+    id:'ndfdGlow',
+    beforeDatasetDraw(chart,args){
+      const ds=chart.data.datasets[args.index];
+      if(!ds||!String(ds.label).startsWith('NDFD'))return;
+      const ctx=chart.ctx;
+      ctx.save();
+      ctx.shadowColor='rgba(70,190,255,.95)';
+      ctx.shadowBlur=14;
+      ctx.shadowOffsetX=0;
+      ctx.shadowOffsetY=0;
+    },
+    afterDatasetDraw(chart,args){
+      const ds=chart.data.datasets[args.index];
+      if(ds&&String(ds.label).startsWith('NDFD'))chart.ctx.restore();
+    }
+  };
 
   const canvas=document.getElementById('verificationChart');
   if(state.verificationChart)state.verificationChart.destroy();
@@ -425,6 +463,7 @@ async function renderVerification(){
     state.verificationChart=new Chart(canvas,{
       type:'line',
       data:{labels,datasets},
+      plugins:[ndfdGlowPlugin],
       options:{
         responsive:true,
         maintainAspectRatio:false,
@@ -433,27 +472,24 @@ async function renderVerification(){
           legend:{labels:{color:'#dbe9f5',boxWidth:12,font:{family:'Poppins',size:10}}},
           tooltip:{callbacks:{
             label:c=>{
-              const maeVal=c.dataset._mae&&c.dataset._mae[c.dataIndex]!=null?Number(c.dataset._mae[c.dataIndex]):null;
-              const rank=c.parsed.y;
-              return c.dataset.label+': rank '+rank+(isNum(maeVal)?' · MAE '+maeVal.toFixed(2)+'°F':'');
+              const bias=c.dataset._bias&&c.dataset._bias[c.dataIndex]!=null?Number(c.dataset._bias[c.dataIndex]):null;
+              return c.dataset.label.replace(' ★','')+': MAE '+(c.parsed.y==null?'—':c.parsed.y.toFixed(2)+'°F')+(isNum(bias)?' · Bias '+(bias>=0?'+':'')+bias.toFixed(2)+'°F':'');
             }
           }}
         },
         scales:{
           x:{ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.12)'}},
           y:{
-            min:1,
-            max:7,
-            reverse:false,
-            title:{display:true,text:'Daily verification rank (1 = best)',color:'#cbdbe9',font:{family:'Poppins',size:10}},
-            ticks:{stepSize:1,color:'#9fb4c9',font:{family:'Poppins',size:9},callback:v=>'#'+v},
+            beginAtZero:true,
+            title:{display:true,text:'Mean Absolute Error (°F)',color:'#cbdbe9',font:{family:'Poppins',size:10}},
+            ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},
             grid:{color:'rgba(120,150,180,.16)'}
           }
         }
       }
     });
   }
-  document.getElementById('verifyChartNote').textContent='Daily rank is based on MAE against RTMA; lower is better. Hover any point for actual MAE. '+(root.leadLabel||'');
+  document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Greener lines have lower rolling MAE; warmer colors indicate poorer recent performance. NDFD is shown with a blue glow. '+(root.leadLabel||'');
 }
 
 async function loadSeason(){
@@ -548,12 +584,12 @@ function renderSelectedEventDetail(){const e=state.selectedEvent;if(!e){document
 async function ensureStationCatalog(){if(state.stationCatalog)return state.stationCatalog;await loadStationCatalog();return state.stationCatalog}
 
 function updatePointSourceSummary(){const c=state.sourceCounts||{};const el=document.getElementById('pointSourceSummary');if(el)el.textContent='METAR '+(c.METAR||0)+' · COOP '+(c.COOP||0)+' · RWIS '+(c.RWIS||0)+' · USCRN '+(c.USCRN||0)}
-async function loadEventPointVerification(e){renderSelectedEventDetail();state.sourceCounts={METAR:0,COOP:0,RWIS:0,USCRN:0};updatePointSourceSummary();const start=new Date(e.begin),finish=new Date(Math.min(Date.parse(e.end),Date.now()));if(isNaN(start)||isNaN(finish)||finish<=start){showPointError('This event has not reached its valid observation window yet.');return}state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';let primaryResults=[];try{const cat=await ensureStationCatalog();if(cat){const mode=document.getElementById('stationMode').value,all=mode==='asosawos'?(cat.asosAwosSites||[]):(cat.allSites||[]),stations=all.filter(s=>s.wfo===e.wfo&&eventContainsPoint(e,s.lon,s.lat));if(stations.length){const q=new URLSearchParams();['tmpf','dwpf','feel'].forEach(v=>q.append('data',v));stations.forEach(s=>q.append('station',s.obs));['1','3','4'].forEach(v=>q.append('report_type',v));q.set('sts',start.toISOString());q.set('ets',finish.toISOString());q.set('tz','UTC');q.set('latlon','yes');q.set('format','onlycomma');q.set('missing','empty');const u='https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?'+q.toString(),r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('IEM METAR HTTP '+r.status);const rows=parseCsv(await r.text()),by=new Map(stations.map(s=>[s.obs,{station:s,minTemp:null,minTempTime:null,minFeel:null,minFeelTime:null,rows:0}]));rows.forEach(row=>{const id=String(row.station||'').trim().toUpperCase(),a=by.get(id);if(!a)return;const t=num(row.tmpf),f=num(row.feel),valid=row.valid||row.timestamp||'';a.rows++;if(isNum(t)&&(a.minTemp===null||t<a.minTemp)){a.minTemp=t;a.minTempTime=valid}if(isNum(f)&&(a.minFeel===null||f<a.minFeel)){a.minFeel=f;a.minFeelTime=valid}});primaryResults=[...by.values()].map(a=>scorePoint(a,e))}}}catch(ex){console.warn('Primary METAR verification unavailable',ex)}
+async function loadEventPointVerification(e){renderSelectedEventDetail();state.sourceCounts={METAR:0,COOP:0,RWIS:0,USCRN:0};updatePointSourceSummary();const start=new Date(e.begin),finish=new Date(Math.min(Date.parse(e.end),Date.now()));if(isNaN(start)||isNaN(finish)||finish<=start){showPointError('This event has not reached its valid observation window yet.');return}state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';let primaryResults=[];try{const cat=await ensureStationCatalog();if(cat){const mode=document.getElementById('stationMode').value,all=mode==='asosawos'?(cat.asosAwosSites||[]):(cat.allSites||[]),stations=all.filter(s=>s.wfo===e.wfo&&eventContainsPoint(e,s.lon,s.lat));if(stations.length){const q=new URLSearchParams();['tmpf','dwpf','feel','sknt','skyc1'].forEach(v=>q.append('data',v));stations.forEach(s=>q.append('station',s.obs));['1','3','4'].forEach(v=>q.append('report_type',v));q.set('sts',start.toISOString());q.set('ets',finish.toISOString());q.set('tz','UTC');q.set('latlon','yes');q.set('format','onlycomma');q.set('missing','empty');const u='https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?'+q.toString(),r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('IEM METAR HTTP '+r.status);const rows=parseCsv(await r.text()),by=new Map(stations.map(s=>[s.obs,{station:s,minTemp:null,minTempTime:null,minFeel:null,minFeelTime:null,maxPotFrost:null,maxPotFrostTime:null,rows:0}]));rows.forEach(row=>{const id=String(row.station||'').trim().toUpperCase(),a=by.get(id);if(!a)return;const t=num(row.tmpf),td=num(row.dwpf),f=num(row.feel),w=num(row.sknt),sky=row.skyc1||'',valid=row.valid||row.timestamp||'',pf=observedPotFrostScore(t,td,w,sky);a.rows++;if(isNum(t)&&(a.minTemp===null||t<a.minTemp)){a.minTemp=t;a.minTempTime=valid}if(isNum(f)&&(a.minFeel===null||f<a.minFeel)){a.minFeel=f;a.minFeelTime=valid}if(isNum(pf)&&(a.maxPotFrost===null||pf>a.maxPotFrost)){a.maxPotFrost=pf;a.maxPotFrostTime=valid}});primaryResults=[...by.values()].map(a=>scorePoint(a,e))}}}catch(ex){console.warn('Primary METAR verification unavailable',ex)}
 state.eventPointResults=primaryResults;e.pointSummary={hits:primaryResults.filter(x=>x.hit===true).length,total:primaryResults.filter(x=>x.hasData).length};renderEventList();renderEventPointResults(e,primaryResults);const jobs=[];if(document.getElementById('showCoopSupplement').checked)jobs.push(loadCoopSupplement(e));if(document.getElementById('showRwisSupplement').checked)jobs.push(loadRwisSupplement(e,start,finish));if(document.getElementById('showUscrnSupplement').checked)jobs.push(loadUscrnSupplement(e,start,finish));await Promise.allSettled(jobs);if(!primaryResults.some(x=>x.hasData)&&jobs.length===0)showPointError('No primary METAR points were available inside this event geometry.')}
 async function loadCoopSupplement(e){const valid=localDateFromIso(e.end||e.begin);if(!valid)return;try{let payload=state.coopCache.get(valid);if(!payload){const r=await fetch('https://mesonet.agron.iastate.edu/geojson/coopobs.py?valid='+encodeURIComponent(valid),{cache:'no-store'});if(!r.ok)throw new Error('COOP HTTP '+r.status);payload=await r.json();state.coopCache.set(valid,payload)}const rows=(payload.features||[]).filter(f=>f&&f.geometry&&f.geometry.type==='Point'&&eventContainsPoint(e,Number(f.geometry.coordinates[0]),Number(f.geometry.coordinates[1]))).map(f=>scoreCoopFeature(f,e));renderCoopSupplement(rows)}catch(ex){const list=document.getElementById('pointList');list.insertAdjacentHTML('beforeend','<div class="small">COOP supplemental data unavailable: '+esc(err(ex))+'</div>')}}
-function scoreCoopFeature(f,e){const p=f.properties||{},lon=Number(f.geometry.coordinates[0]),lat=Number(f.geometry.coordinates[1]),county=findCountyForPoint(lon,lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e),low=num(p.low);return{station:String(p.station||f.id||'COOP'),name:String(p.name||'COOP'),network:String(p.network||'COOP'),lat,lon,low,valid:p.utc_valid||'',hour:p.hour,criterion:crit,hit:isNum(low)&&isNum(crit.threshold)?low<=crit.threshold:null}}
+function scoreCoopFeature(f,e){const p=f.properties||{},lon=Number(f.geometry.coordinates[0]),lat=Number(f.geometry.coordinates[1]),county=findCountyForPoint(lon,lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e),low=num(p.low),hit=crit.metric==='potfrost'?null:(isNum(low)&&isNum(crit.threshold)?low<=crit.threshold:null);return{station:String(p.station||f.id||'COOP'),name:String(p.name||'COOP'),network:String(p.network||'COOP'),lat,lon,low,valid:p.utc_valid||'',hour:p.hour,criterion:crit,hit}}
 function findCountyForPoint(lon,lat){if(!state.data||!state.data.countiesGeoJson)return null;const feat=(state.data.countiesGeoJson.features||[]).find(f=>pointInFeature(lon,lat,f));if(!feat)return null;const id=String((feat.properties||{}).fips||'').padStart(5,'0');return state.data.countyStats?state.data.countyStats[id]:null}
-function renderCoopSupplement(rows){const usableRows=(rows||[]).filter(r=>isNum(r.low));state.sourceCounts.COOP=usableRows.length;updatePointSourceSummary();if(!rows.length)return;rows.forEach(r=>{const color=r.hit===true?'#f6d36f':r.hit===false?'#b99a52':'#a6afba';L.circleMarker([r.lat,r.lon],{radius:5,color:'#fff1bd',weight:1.5,fillColor:color,fillOpacity:.92,dashArray:'2,2'}).bindTooltip(r.station+' · COOP · '+(isNum(r.low)?fmt(r.low)+'°F':'No data')+(r.hit===true?' · SUPPORT':r.hit===false?' · NO SUPPORT':''),{sticky:true,className:'county-tip'}).bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.network)+' · COOP supplemental</small><div class="popup-rule"></div><div class="popup-grid"><span>24-hour low</span><strong>'+fmt(r.low)+'°F</strong><span>Report valid</span><strong>'+esc(r.valid||'—')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+(isNum(r.criterion.threshold)?' ('+fmt(r.criterion.threshold)+'°F)':'')+'</strong><span>Use</span><strong>Supplemental only</strong></div>').addTo(state.verificationLayer)});const list=document.getElementById('pointList');const hdr='<div class="small" style="margin-top:6px"><b>COOP supplemental · 24-hour lows</b></div>';const body=rows.sort((a,b)=>(a.low??999)-(b.low??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · COOP SUPP</small></div><strong>'+(isNum(r.low)?fmt(r.low)+'°F':'—')+'</strong><span class="'+(r.hit===true?'hit':r.hit===false?'miss':'nodata')+'">'+(r.hit===true?'SUPPORT':r.hit===false?'NO':'NO DATA')+'</span></div>').join('');list.insertAdjacentHTML('beforeend',hdr+body)}
+function renderCoopSupplement(rows){const usableRows=(rows||[]).filter(r=>isNum(r.low));state.sourceCounts.COOP=usableRows.length;updatePointSourceSummary();if(!rows.length)return;rows.forEach(r=>{const color=r.hit===true?'#f6d36f':r.hit===false?'#b99a52':'#a6afba';L.circleMarker([r.lat,r.lon],{radius:5,color:'#fff1bd',weight:1.5,fillColor:color,fillOpacity:.92,dashArray:'2,2'}).bindTooltip(r.station+' · COOP · '+(isNum(r.low)?fmt(r.low)+'°F':'No data')+(r.hit===true?' · SUPPORT':r.hit===false?' · NO SUPPORT':''),{sticky:true,className:'county-tip'}).bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.network)+' · COOP supplemental</small><div class="popup-rule"></div><div class="popup-grid"><span>24-hour low</span><strong>'+fmt(r.low)+'°F</strong><span>Report valid</span><strong>'+esc(r.valid||'—')+'</strong><span>PotFrost</span><strong>'+(r.criterion.metric==='potfrost'?fmt(r.potFrost):'—')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+(isNum(r.criterion.threshold)?' ('+fmt(r.criterion.threshold)+(r.criterion.metric==='potfrost'?'':'°F')+')':'')+'</strong><span>Use</span><strong>Supplemental only</strong></div>').addTo(state.verificationLayer)});const list=document.getElementById('pointList');const hdr='<div class="small" style="margin-top:6px"><b>COOP supplemental · 24-hour lows</b></div>';const body=rows.sort((a,b)=>(a.low??999)-(b.low??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · COOP SUPP</small></div><strong>'+(isNum(r.low)?fmt(r.low)+'°F':'—')+'</strong><span class="'+(r.hit===true?'hit':r.hit===false?'miss':'nodata')+'">'+(r.hit===true?'SUPPORT':r.hit===false?'NO':'NO DATA')+'</span></div>').join('');list.insertAdjacentHTML('beforeend',hdr+body)}
 
 const RWIS_NETWORKS=['AL_RWIS','AR_RWIS','FL_RWIS','GA_RWIS','LA_RWIS','MS_RWIS'];
 async function fetchNetworkSites(network){if(state.networkCache.has(network))return state.networkCache.get(network);try{const r=await fetch('https://mesonet.agron.iastate.edu/geojson/network.py?network='+encodeURIComponent(network),{cache:'force-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const g=await r.json(),sites=(g.features||[]).map(f=>{const p=f.properties||{},coords=(f.geometry||{}).coordinates||[],id=String(p.sid||p.station||p.id||f.id||'').trim();return{id,name:String(p.sname||p.name||id),lat:num(coords[1]),lon:num(coords[0]),network}}).filter(s=>s.id&&isNum(s.lat)&&isNum(s.lon));state.networkCache.set(network,sites);return sites}catch(e){console.warn('Network metadata unavailable',network,e);state.networkCache.set(network,[]);return[]}}
@@ -561,9 +597,25 @@ async function loadRwisSupplement(e,start,finish){const sections=[];for(const ne
 async function loadUscrnSupplement(e,start,finish){try{const sites=(await fetchNetworkSites('USCRN')).filter(s=>eventContainsPoint(e,s.lon,s.lat));if(!sites.length)return;const q=new URLSearchParams();q.set('stations',sites.map(s=>s.id).join(','));q.set('sts',start.toISOString());q.set('ets',finish.toISOString());q.set('format','json');const r=await fetch('https://mesonet.agron.iastate.edu/cgi-bin/request/uscrn.py?'+q.toString(),{cache:'no-store'});if(!r.ok)throw new Error('USCRN HTTP '+r.status);const rows=await r.json(),by=new Map(sites.map(s=>[s.id,{site:s,minTemp:null,minTime:null}]));(Array.isArray(rows)?rows:[]).forEach(row=>{const a=by.get(String(row.station||'').trim());if(!a)return;const c=num(row.tmpc),t=isNum(c)?c*9/5+32:null;if(isNum(t)&&(a.minTemp===null||t<a.minTemp)){a.minTemp=t;a.minTime=row.utc_valid||''}});const scored=[...by.values()].map(a=>scoreSupplementPoint(a.site,a.minTemp,null,a.minTime,e,'USCRN'));renderSupplementPoints(scored,'USCRN exact-window','#b98cff','#e2cdff','USCRN')}catch(ex){console.warn('USCRN query failed',ex);document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small">USCRN supplemental data unavailable: '+esc(err(ex))+'</div>')}}
 function scoreSupplementPoint(site,minTemp,minFeel,time,e,source){const county=findCountyForPoint(site.lon,site.lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e),value=crit.metric==='apparent'?minFinite(minTemp,minFeel):minTemp;return{station:site.id,name:site.name,lat:site.lat,lon:site.lon,minTemp,minFeel,value,time,criterion:crit,source,hasData:isNum(value),hit:isNum(value)&&isNum(crit.threshold)?value<=crit.threshold:null}}
 function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){const usable=rows.filter(r=>r.hasData);if(sourceKey){state.sourceCounts[sourceKey]=usable.length;updatePointSourceSummary()}if(!usable.length)return;usable.forEach(r=>{L.circleMarker([r.lat,r.lon],{radius:5,color:borderColor,weight:1.5,fillColor,fillOpacity:.9,dashArray:'3,2'}).bindTooltip(r.station+' · '+r.source+' · '+fmt(r.value)+'°F · '+(r.hit?'SUPPORT':'NO SUPPORT'),{sticky:true,className:'county-tip'}).bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.source)+' supplemental</small><div class="popup-rule"></div><div class="popup-grid"><span>Lowest T</span><strong>'+fmt(r.minTemp)+'°F</strong><span>Lowest apparent</span><strong>'+fmt(r.minFeel)+'°F</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+(isNum(r.criterion.threshold)?' ('+fmt(r.criterion.threshold)+'°F)':'')+'</strong><span>Use</span><strong>Supplemental only</strong></div>').addTo(state.verificationLayer)});const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:7px"><b>'+esc(label)+' · supplemental</b></div>',body=usable.sort((a,b)=>a.value-b.value).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · '+esc(r.source)+' SUPP</small></div><strong>'+fmt(r.value)+'°F</strong><span class="'+(r.hit?'hit':'miss')+'">'+(r.hit?'SUPPORT':'NO')+'</span></div>').join('');list.insertAdjacentHTML('beforeend',hdr+body)}
-function scorePoint(a,e){const c=pointCriterion(a.station,e),value=c.metric==='apparent'?minFinite(a.minTemp,a.minFeel):a.minTemp;let time=a.minTempTime;if(c.metric==='apparent'&&isNum(a.minFeel)&&(!isNum(a.minTemp)||a.minFeel<=a.minTemp))time=a.minFeelTime;return{station:a.station,minTemp:a.minTemp,minFeel:a.minFeel,value,time,criterion:c,hasData:isNum(value),hit:isNum(value)&&isNum(c.threshold)?value<=c.threshold:null}}
-function pointCriterion(st,e){const c=st.criteria||{};if(e.type==='Frost Advisory')return{threshold:37,metric:'temp',label:'Frost support ≤37°F'};if(e.type==='Freeze Watch'||e.type==='Freeze Warning')return{threshold:32,metric:'temp',label:'Freeze ≤32°F'};if(e.type==='Cold Weather Advisory')return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Local Cold Advisory'};if(e.type==='Extreme Cold Watch'||e.type==='Extreme Cold Warning')return{threshold:num(c.extremeCold),metric:'apparent',label:'Local Extreme Cold'};if(e.type==='Legacy Hard Freeze')return{threshold:25,metric:'temp',label:'Hard freeze ≤25°F'};return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Legacy wind chill proxy'}}
-function renderEventPointResults(e,results){state.verificationLayer.clearLayers();const usable=results.filter(r=>r.hasData),hits=usable.filter(r=>r.hit).length;state.sourceCounts.METAR=usable.length;updatePointSourceSummary();usable.forEach(r=>{const color=r.hit?'#44e28b':'#ff6b78',s=r.station;L.circleMarker([s.lat,s.lon],{radius:6,color:'#06101a',weight:1.4,fillColor:color,fillOpacity:.96}).bindTooltip(s.displayId+' · '+fmt(r.value)+'°F · '+(r.hit?'HIT':'MISS'),{sticky:true,className:'county-tip'}).bindPopup('<b>'+esc(s.displayId)+' · '+esc(s.name)+'</b><br>'+esc(s.countyName||'')+' · '+esc(s.type||'METAR')+'<div class="popup-rule"></div><div class="popup-grid"><span>Lowest T</span><strong>'+fmt(r.minTemp)+'°F</strong><span>Lowest apparent</span><strong>'+fmt(r.minFeel)+'°F</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+(isNum(r.criterion.threshold)?' ('+fmt(r.criterion.threshold)+'°F)':'')+'</strong><span>Result</span><strong>'+(r.hit?'HIT':'MISS')+'</strong></div>').addTo(state.verificationLayer)});document.getElementById('eventCountyCount').textContent=usable.length;document.getElementById('eventHitCount').textContent=hits;document.getElementById('pointList').innerHTML=results.sort((a,b)=>(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station.displayId)+'</b><small>'+esc(r.station.name)+' · '+esc(r.station.type||'METAR')+'</small></div><strong>'+(r.hasData?fmt(r.value)+'°F':'—')+'</strong><span class="'+(r.hit===true?'hit':r.hit===false?'miss':'nodata')+'">'+(r.hit===true?'HIT':r.hit===false?'MISS':'NO DATA')+'</span></div>').join('');renderSelectedEventDetail()}
+function scorePoint(a,e){const c=pointCriterion(a.station,e);let value,time,hit=null;if(c.metric==='potfrost'){value=a.maxPotFrost;time=a.maxPotFrostTime;hit=isNum(value)?value>=c.threshold:null}else{value=c.metric==='apparent'?minFinite(a.minTemp,a.minFeel):a.minTemp;time=a.minTempTime;if(c.metric==='apparent'&&isNum(a.minFeel)&&(!isNum(a.minTemp)||a.minFeel<=a.minTemp))time=a.minFeelTime;hit=isNum(value)&&isNum(c.threshold)?value<=c.threshold:null}return{station:a.station,minTemp:a.minTemp,minFeel:a.minFeel,potFrost:a.maxPotFrost,value,time,criterion:c,hasData:isNum(value),hit}}
+function observedPotFrostScore(t,td,windKt,skyCode){
+  if(!isNum(t)||!isNum(td)||!isNum(windKt))return null;
+  const dep=t-td,sky=String(skyCode||'').toUpperCase();
+  if(dep>9||windKt>7||sky==='BKN'||sky==='OVC'||sky==='VV')return 0;
+  let dewscore=dep<=5?6:3;
+  if(windKt<=3)dewscore+=4;else if(windKt<=7)dewscore+=2;
+  if(sky==='CLR'||sky==='SKC'||sky==='FEW'||!sky)dewscore+=2;else if(sky==='SCT')dewscore+=1;else return 0;
+  if(dewscore<=6)return 0;
+  let frostscore=0;
+  if(t<=34)frostscore=3;else if(t<=37)frostscore=2;
+  if(t<38){if(td<=32)frostscore+=3;else if(td<=34)frostscore+=2}
+  if(frostscore===6)return 70;
+  if(frostscore>3&&frostscore<6)return 40;
+  if(frostscore>1&&frostscore<=3)return 20;
+  return 0;
+}
+function pointCriterion(st,e){const c=st.criteria||{};if(e.type==='Frost Advisory')return{threshold:40,metric:'potfrost',label:'Observed PotFrost ≥40 (Areas/Widespread)'};if(e.type==='Freeze Watch'||e.type==='Freeze Warning')return{threshold:32,metric:'temp',label:'Freeze ≤32°F'};if(e.type==='Cold Weather Advisory')return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Local Cold Advisory'};if(e.type==='Extreme Cold Watch'||e.type==='Extreme Cold Warning')return{threshold:num(c.extremeCold),metric:'apparent',label:'Local Extreme Cold'};if(e.type==='Legacy Hard Freeze')return{threshold:25,metric:'temp',label:'Hard freeze ≤25°F'};return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Legacy wind chill proxy'}}
+function renderEventPointResults(e,results){state.verificationLayer.clearLayers();const usable=results.filter(r=>r.hasData),hits=usable.filter(r=>r.hit).length;state.sourceCounts.METAR=usable.length;updatePointSourceSummary();usable.forEach(r=>{const color=r.hit?'#44e28b':'#ff6b78',s=r.station;L.circleMarker([s.lat,s.lon],{radius:6,color:'#06101a',weight:1.4,fillColor:color,fillOpacity:.96}).bindTooltip(s.displayId+' · '+(r.criterion.metric==='potfrost'?'PotFrost '+fmt(r.value):fmt(r.value)+'°F')+' · '+(r.hit?'HIT':'MISS'),{sticky:true,className:'county-tip'}).bindPopup('<b>'+esc(s.displayId)+' · '+esc(s.name)+'</b><br>'+esc(s.countyName||'')+' · '+esc(s.type||'METAR')+'<div class="popup-rule"></div><div class="popup-grid"><span>Lowest T</span><strong>'+fmt(r.minTemp)+'°F</strong><span>Lowest apparent</span><strong>'+fmt(r.minFeel)+'°F</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+(isNum(r.criterion.threshold)?' ('+fmt(r.criterion.threshold)+'°F)':'')+'</strong><span>Result</span><strong>'+(r.hit?'HIT':'MISS')+'</strong></div>').addTo(state.verificationLayer)});document.getElementById('eventCountyCount').textContent=usable.length;document.getElementById('eventHitCount').textContent=hits;document.getElementById('pointList').innerHTML=results.sort((a,b)=>(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station.displayId)+'</b><small>'+esc(r.station.name)+' · '+esc(r.station.type||'METAR')+'</small></div><strong>'+(r.hasData?(r.criterion.metric==='potfrost'?'PF '+fmt(r.value):fmt(r.value)+'°F'):'—')+'</strong><span class="'+(r.hit===true?'hit':r.hit===false?'miss':'nodata')+'">'+(r.hit===true?'HIT':r.hit===false?'MISS':'NO DATA')+'</span></div>').join('');renderSelectedEventDetail()}
 function showPointError(message){state.verificationLayer.clearLayers();updatePointSourceSummary();document.getElementById('eventCountyCount').textContent='—';document.getElementById('eventHitCount').textContent='—';document.getElementById('pointList').innerHTML='<div class="small">'+esc(message)+'</div>';renderSelectedEventDetail()}
 function eventContainsPoint(e,lon,lat){if(!Number.isFinite(Number(lon))||!Number.isFinite(Number(lat)))return false;const features=eventFeatures(e);return features.some(f=>pointInFeature(Number(lon),Number(lat),f))}
 function parseCsv(text){const lines=String(text||'').split(/\r?\n/).filter(l=>l.trim()&&!l.startsWith('#'));if(!lines.length)return[];const head=parseCsvLine(lines[0]);return lines.slice(1).map(line=>{const vals=parseCsvLine(line),o={};head.forEach((h,i)=>o[h.trim()]=vals[i]===undefined?'':vals[i]);return o})}
