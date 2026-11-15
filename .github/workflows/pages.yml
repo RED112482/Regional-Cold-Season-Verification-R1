@@ -8,6 +8,8 @@ on:
       - "site/.nojekyll"
       - "site/data/forecast.json"
       - "site/data/verification.json"
+      - "site/data/cwop_recent.json"
+      - "site/data/cwop/**"
       - "scripts/**"
       - ".github/workflows/pages.yml"
       - "README.md"
