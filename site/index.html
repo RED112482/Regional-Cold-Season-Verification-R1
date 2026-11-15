@@ -899,7 +899,7 @@ function addVerificationTotals(rows){
     else if(r.resultCode==='MISS'){state.verificationTotals.points++;state.verificationTotals.misses++}
     else if(r.resultCode==='NO HIT'){state.verificationTotals.points++}
   });
-  document.getElementById('eventCountyCount').textContent=display.length;
+  document.getElementById('eventCountyCount').textContent=state.verificationTotals.points;
   document.getElementById('eventHitCount').textContent=state.verificationTotals.hits+' HIT · '+state.verificationTotals.misses+' MISS';
 }
 function renderEventPointResults(e,results){
