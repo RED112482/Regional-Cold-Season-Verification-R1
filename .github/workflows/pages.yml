@@ -9,6 +9,7 @@ on:
       - "site/data/forecast.json"
       - "site/data/verification.json"
       - "site/data/cwop_recent.json"
+      - "site/data/cwop_daily.json"
       - "site/data/cwop/**"
       - "scripts/**"
       - ".github/workflows/pages.yml"
