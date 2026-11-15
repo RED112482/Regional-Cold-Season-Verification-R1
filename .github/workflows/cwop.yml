@@ -42,10 +42,10 @@ jobs:
           d=json.loads(p.read_text())
           assert isinstance(d.get("stations"), list)
           assert isinstance(d.get("observations"), list)
-          assert (d.get("status") or {}).get("batchesSuccessful", 0) > 0
           print("CWOP stations:", len(d["stations"]))
           print("CWOP observations:", len(d["observations"]))
           print("Status:", d.get("status"))
+          assert (d.get("status") or {}).get("batchesSuccessful", 0) > 0
           PY
 
       - name: Save CWOP JSON
