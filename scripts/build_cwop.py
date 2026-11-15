@@ -12,7 +12,6 @@ import html
 import json
 import math
 import re
-import ssl
 import time
 import urllib.parse
 import urllib.request
@@ -21,7 +20,8 @@ from pathlib import Path
 
 COUNTIES = Path("site/data/counties.geojson")
 OUT = Path("site/data/cwop_recent.json")
-BASE = "https://www.findu.com/cgi-bin"
+APRS_BASE = "https://aprs.fi"
+DIAG = Path("site/data/cwop_aprsfi_diagnostic.html")
 USER_AGENT = "Regional-Cold-Season-Viewer/R14-ETN-VERIFY"
 HISTORY_HOURS = 168
 MAX_STATIONS = 100
@@ -39,12 +39,7 @@ POS_DEC_RE = re.compile(r"(-?\d{1,3}\.\d+)")
 
 def get(url: str, timeout: int = 45) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    # findU currently presents a certificate chain that GitHub Actions'
-    # Python trust store rejects.  These calls are public/read-only weather
-    # retrievals with no credentials, so use an unverified TLS context only
-    # for this fallback host.
-    ctx = ssl._create_unverified_context()
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", "replace")
 
 def c_to_f(c):
@@ -75,42 +70,15 @@ def county_centers():
     return out
 
 def discover_calls():
-    calls = set(SEED_STATIONS)
-    # Use every county center, but stop once the regional cap is reached.
-    for lat, lon in county_centers():
-        if len(calls) >= MAX_STATIONS:
-            break
-        q = urllib.parse.urlencode({"lat": f"{lat:.4f}", "lon": f"{lon:.4f}", "limit": 20, "noold": 0})
-        try:
-            txt = get(f"{BASE}/wxnear.cgi?{q}")
-        except Exception as exc:
-            print("discover warning", lat, lon, exc)
-            continue
-        for call in WX_CALL_RE.findall(txt):
-            call = html.unescape(call).upper()
-            if 2 <= len(call) <= 10:
-                calls.add(call)
-            if len(calls) >= MAX_STATIONS:
-                break
-        time.sleep(0.12)
-    return sorted(calls)
+    # aprs.fi public pages support wildcard browsing, but for automated history
+    # fallback we begin with explicitly verified regional CWOP ids. More can be
+    # added after the page-history parser is validated.
+    return sorted(SEED_STATIONS)
+
 
 def station_position(call):
-    if call in SEED_STATIONS:
-        return SEED_STATIONS[call]
-    q = urllib.parse.urlencode({"call": call, "start": 24, "length": 24, "comma": 1})
-    try:
-        txt = get(f"{BASE}/posit.cgi?{q}")
-    except Exception:
-        return None
-    # findU comma output contains decimal lat/lon.  Choose the first plausible
-    # pair in the regional domain.
-    nums = [float(x) for x in POS_DEC_RE.findall(txt)]
-    for i in range(len(nums) - 1):
-        lat, lon = nums[i], nums[i + 1]
-        if 27.0 <= lat <= 36.5 and -93.5 <= lon <= -81.0:
-            return lat, lon
-    return None
+    return SEED_STATIONS.get(call)
+
 
 def parse_timestamp(line: str):
     m = TS_RE.search(line)
@@ -150,37 +118,87 @@ def parse_packet_weather(packet):
     return temp, rh, wind_mph
 
 def station_history(call, lat, lon):
-    # raw.cgi guarantees timestamp prefix when time=1.  We then keep only
-    # packets that contain APRS weather temperature fields.
-    q = urllib.parse.urlencode({
-        "call": call,
-        "start": HISTORY_HOURS,
-        "length": HISTORY_HOURS,
-        "time": 1,
-    })
-    txt = get(f"{BASE}/raw.cgi?{q}", timeout=60)
+    url = f"{APRS_BASE}/weather/{urllib.parse.quote(call)}/week"
+    txt = get(url, timeout=60)
+
+    # Preserve the exact page returned for GW1930 when parsing fails so the
+    # parser can be corrected from real aprs.fi markup rather than assumptions.
+    def save_diag():
+        try:
+            DIAG.parent.mkdir(parents=True, exist_ok=True)
+            DIAG.write_text(txt[:200000], encoding="utf-8", errors="ignore")
+        except Exception:
+            pass
+
+    # Normalize markup into line-oriented text while retaining script content.
+    cleaned = html.unescape(re.sub(r"<br\s*/?>", "\n", txt, flags=re.I))
+    cleaned = re.sub(r"</(?:tr|div|p|li|script)>", "\n", cleaned, flags=re.I)
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+
     out = []
-    for raw_line in re.split(r"[\r\n]+|<br\s*/?>", txt, flags=re.I):
-        line = html.unescape(re.sub(r"<[^>]+>", " ", raw_line))
-        dt = parse_timestamp(line)
-        if not dt:
+    # Support ISO timestamps and Unix timestamps commonly embedded in chart JS.
+    iso_re = re.compile(r"(20\d{2}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)")
+    unix_re = re.compile(r"\b(1\d{9})\b")
+    temp_c_re = re.compile(r"(?:temp(?:erature)?|t)\s*[:=,]\s*(-?\d+(?:\.\d+)?)", re.I)
+    hum_re = re.compile(r"(?:humidity|rh|h)\s*[:=,]\s*(\d+(?:\.\d+)?)", re.I)
+    wind_ms_re = re.compile(r"(?:wind(?:_speed)?|windspeed|ws)\s*[:=,]\s*(\d+(?:\.\d+)?)", re.I)
+
+    lines = [x.strip() for x in cleaned.splitlines() if x.strip()]
+    for line in lines:
+        dt = None
+        m = iso_re.search(line)
+        if m:
+            try:
+                dt = datetime.fromisoformat(m.group(1).replace("/", "-")).replace(tzinfo=timezone.utc)
+            except Exception:
+                dt = None
+        if dt is None:
+            m = unix_re.search(line)
+            if m:
+                try:
+                    dt = datetime.fromtimestamp(int(m.group(1)), tz=timezone.utc)
+                except Exception:
+                    dt = None
+        if dt is None:
             continue
-        wx = parse_packet_weather(line)
-        if not wx:
+
+        tm = temp_c_re.search(line)
+        if not tm:
             continue
-        temp_f, rh, wind_mph = wx
-        dew_f = dewpoint_f(temp_f, rh)
+        try:
+            tc = float(tm.group(1))
+        except Exception:
+            continue
+        # Reject impossible Celsius values so graph axes/IDs are not mistaken
+        # for temperatures.
+        if tc < -80 or tc > 60:
+            continue
+
+        hm = hum_re.search(line)
+        wm = wind_ms_re.search(line)
+        rh = float(hm.group(1)) if hm else None
+        wind_ms = float(wm.group(1)) if wm else None
+        temp_f = c_to_f(tc)
+        dew_f = dewpoint_f(temp_f, rh) if rh is not None else None
         out.append({
             "id": call,
-            "provider": "findU CWOP/APRS",
+            "provider": "aprs.fi CWOP/APRS public weather history",
             "lat": round(lat, 5),
             "lon": round(lon, 5),
             "time": dt.isoformat().replace("+00:00", "Z"),
             "tempF": round(temp_f, 2),
             "dewF": round(dew_f, 2) if dew_f is not None else None,
-            "windKt": round(wind_mph * 0.868976, 2) if wind_mph is not None else None,
+            "windKt": round(wind_ms * 1.94384449, 2) if wind_ms is not None else None,
         })
+
+    # Dedupe plausible rows. If none are found, save real page markup for the
+    # next parser refinement.
+    dedup = {(r["id"], r["time"]): r for r in out}
+    out = sorted(dedup.values(), key=lambda r: r["time"])
+    if not out:
+        save_diag()
     return out
+
 
 def write_atomic(payload):
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -203,8 +221,11 @@ def main():
         try:
             rows = station_history(call, lat, lon)
             if rows:
+                if call == "GW1930" and DIAG.exists():
+                    try: DIAG.unlink()
+                    except OSError: pass
                 obs.extend(rows)
-                stations.append({"id": call, "provider": "findU CWOP/APRS", "lat": lat, "lon": lon})
+                stations.append({"id": call, "provider": "aprs.fi CWOP/APRS", "lat": lat, "lon": lon})
                 print(call, "obs", len(rows))
         except Exception as exc:
             errors.append(f"{call}: {type(exc).__name__}: {exc}")
@@ -216,7 +237,7 @@ def main():
     unique_st = {s["id"]: s for s in stations}
     payload = {
         "generatedUtc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "source": "findU station-targeted CWOP/APRS history fallback",
+        "source": "aprs.fi public CWOP/APRS weather-history fallback",
         "windowDays": HISTORY_HOURS / 24,
         "status": {
             "discoveredStations": len(calls),
