@@ -644,7 +644,11 @@ function classifyVerificationResult(r,e){
 }
 function verificationValueText(r){
   if(!r||!r.hasData)return'—';
-  if(r.criterion&&r.criterion.metric==='potfrost')return'PF '+fmt(r.value);
+  if(r.criterion&&r.criterion.metric==='potfrost'){
+    if(isNum(r.value))return'PF '+fmt(r.value);
+    if(isNum(r.minTemp))return'T '+fmt(r.minTemp)+'°F';
+    return'—';
+  }
   return fmt(r.value)+'°F';
 }
 function durationText(minutes){
@@ -772,7 +776,12 @@ async function loadCwopSupplement(e,start,finish){
     if(crit.metric==='potfrost'){value=maxPot;criterionMet=isNum(value)?value>=crit.threshold:null;valueSource=isNum(value)?'CWOP T/Td/wind + nearby METAR sky':'CWOP frost incomplete'}
     else if(crit.metric==='apparent'){value=minFinite(minTemp,minFeel);criterionMet=isNum(value)&&isNum(crit.threshold)?value<=crit.threshold:null;valueSource='CWOP derived apparent'}
     else{value=minTemp;criterionMet=isNum(value)&&isNum(crit.threshold)?value<=crit.threshold:null}
-    const base={station:g.site.id,name:g.site.name,lat:g.site.lat,lon:g.site.lon,minTemp,minFeel,potFrost:maxPot,value,time:minTime,criterion:crit,source:'CWOP/APRS',hasData:isNum(value),criterionMet,durationMinutes:durationFromSamples(samples,crit),valueSource};
+    // A CWOP station still has useful exact-window observations even when a
+    // Frost Advisory PotFrost score cannot be completed because nearby METAR
+    // sky cover is unavailable. Keep that station visible as supplemental
+    // temperature data; only assign HIT/MISS when the criterion is calculable.
+    const hasObservedData=crit.metric==='potfrost'?isNum(minTemp):isNum(value);
+    const base={station:g.site.id,name:g.site.name,lat:g.site.lat,lon:g.site.lon,minTemp,minFeel,potFrost:maxPot,value,time:minTime,criterion:crit,source:'CWOP/APRS',hasData:hasObservedData,criterionMet,durationMinutes:durationFromSamples(samples,crit),valueSource};
     if(criterionMet===null){base.hit=null;base.resultCode='SUPP';base.inHazard=eventContainsPoint(e,g.site.lon,g.site.lat)}
     else{const cls=classifyVerificationResult(base,e);base.hit=cls.hit;base.resultCode=cls.code;base.inHazard=cls.inHazard}
     scored.push(base);
@@ -847,7 +856,7 @@ function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){
     const code=r.resultCode||'SUPP',color=code==='HIT'?'#4bf0a0':code==='MISS'?'#ff647a':fillColor,edge=code==='HIT'?'#d9ffeb':code==='MISS'?'#ffe0e5':borderColor;
     L.circleMarker([r.lat,r.lon],{radius:6.5,color:edge,weight:2,fillColor:color,fillOpacity:.94,dashArray:'3,2'})
       .bindTooltip(r.station+' · '+r.source+' · '+verificationValueText(r)+' · '+code+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':''),{sticky:true,className:'county-tip'})
-      .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.source)+'</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Duration in criteria</span><strong>'+(isNum(r.durationMinutes)?durationText(r.durationMinutes):'—')+'</strong><span>Result</span><strong>'+code+'</strong></div>')
+      .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.source)+'</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Air temperature low</span><strong>'+fmt(r.minTemp)+'°F</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Duration in criteria</span><strong>'+(isNum(r.durationMinutes)?durationText(r.durationMinutes):'—')+'</strong><span>Result</span><strong>'+code+'</strong></div>')
       .addTo(state.verificationLayer);
     if(code==='HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
   });
