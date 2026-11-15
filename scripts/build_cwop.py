@@ -82,15 +82,20 @@ def recent_etn_windows(now: datetime, lookback_days: int = 7):
             end = datetime.fromisoformat(end_s.replace("Z", "+00:00"))
         except Exception:
             continue
+        if end <= begin:
+            continue
         if end < cutoff or begin > now:
             continue
-        # Small margin captures observations just outside nominal issuance
+        # Small margin captures observations just outside nominal event
         # boundaries without retaining full-day histories.
-        raw.append((max(begin, cutoff) - timedelta(minutes=30),
-                    min(end, now) + timedelta(minutes=30)))
+        a = max(begin, cutoff) - timedelta(minutes=30)
+        b = min(end, now) + timedelta(minutes=30)
+        if b <= a:
+            continue
+        raw.append((a, b))
     if not raw:
         return []
-    raw.sort()
+    raw = sorted(set(raw))
     merged = [list(raw[0])]
     for begin, end in raw[1:]:
         if begin <= merged[-1][1] + timedelta(minutes=30):
