@@ -536,6 +536,34 @@ async function renderVerification(){
   document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Green = best rolling performance, red = worst. NDFD keeps an additional glow/outline so it remains easy to track. '+(root.leadLabel||'');
 }
 
+async function mergeCwopDailyIntoFrequency(data){
+  if(!data||!data.countiesGeoJson||!data.countyStats)return;
+  try{
+    const r=await fetch('./data/cwop_daily.json',{cache:'no-store'});
+    if(!r.ok)return;
+    const p=await r.json(),dates=data.dates||[],dateIndex=new Map(dates.map((d,i)=>[d,i]));
+    for(const meta of (p.metadata||[])){
+      const lon=num(meta.lon),lat=num(meta.lat),stid=String(meta.id||'').trim();
+      if(!stid||!isNum(lon)||!isNum(lat))continue;
+      const feature=(data.countiesGeoJson.features||[]).find(f=>pointInFeature(lon,lat,f));
+      if(!feature)continue;
+      const fips=String((feature.properties||{}).fips||'').padStart(5,'0'),row=data.countyStats[fips];
+      if(!row)continue;
+      const days=(p.stations||{})[stid]||{},stTemp=Array(dates.length).fill(null),stFeel=Array(dates.length).fill(null);
+      Object.entries(days).forEach(([d,v])=>{const ix=dateIndex.get(d);if(ix===undefined)return;const t=num(v&&v.minTemp),f=num(v&&v.minFeel);if(isNum(t))stTemp[ix]=t;if(isNum(f))stFeel[ix]=f});
+      if(!stTemp.some(isNum)&&!stFeel.some(isNum))continue;
+      row.stations=row.stations||[];row.stationDaily=row.stationDaily||[];
+      if(!row.stations.some(x=>String(x.obs||x.id)===stid))row.stations.push({id:stid,obs:stid,name:meta.name||stid,type:'CWOP',network:'SYNOPTIC_CWOP',lat,lon});
+      const existing=row.stationDaily.find(x=>String(x.obs||x.id)===stid);
+      const st={id:stid,obs:stid,name:meta.name||stid,type:'CWOP',network:'SYNOPTIC_CWOP',lat,lon,dailyMinTemp:stTemp,dailyMinFeel:stFeel};
+      if(existing)Object.assign(existing,st);else row.stationDaily.push(st);
+      row.coverage='inside';row.nearestMiles=null;
+      row.dailyMinTemp=row.dailyMinTemp||Array(dates.length).fill(null);row.dailyMinFeel=row.dailyMinFeel||Array(dates.length).fill(null);
+      for(let j=0;j<dates.length;j++){if(isNum(stTemp[j]))row.dailyMinTemp[j]=minFinite(num(row.dailyMinTemp[j]),stTemp[j]);if(isNum(stFeel[j]))row.dailyMinFeel[j]=minFinite(num(row.dailyMinFeel[j]),stFeel[j])}
+    }
+  }catch(e){console.warn('CWOP daily frequency merge unavailable',e)}
+}
+
 async function loadSeason(){
   const b=document.getElementById('loadBtn');
   const year=Number(document.getElementById('seasonSelect').value);
@@ -552,6 +580,7 @@ async function loadSeason(){
     if(response.ok){
       const data=await response.json();
       data.countiesGeoJson=await countiesResponse.json();
+      await mergeCwopDailyIntoFrequency(data);
       state.data=data;
       initializeTimeline();
       fitMaps();
