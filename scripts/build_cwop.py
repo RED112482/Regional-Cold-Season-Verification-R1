@@ -21,7 +21,7 @@ from pathlib import Path
 import netCDF4
 import numpy as np
 
-BASE = "https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/mesonet/netCDF"
+BASE = "https://madis-data.ncep.noaa.gov/madisPublic/data/LDAD/mesonet/netCDF"
 OUT = Path("site/data/cwop_recent.json")
 USER_AGENT = "Regional-Cold-Season-Viewer/R14-ETN-VERIFY"
 # Broad box encompassing MOB/LIX/JAN/BMX/TAE with a little margin.
@@ -212,6 +212,12 @@ def main():
         "generatedUtc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "source": "NOAA MADIS public mesonet / CWOP-APRS",
         "windowDays": 14,
+        "status": {
+            "attemptedHours": attempted,
+            "successfulHours": succeeded,
+            "decodedThisRun": decoded_obs,
+            "errors": errors[-12:],
+        },
         "stations": sorted(stations.values(), key=lambda x: x["id"]),
         "observations": obs,
     }
