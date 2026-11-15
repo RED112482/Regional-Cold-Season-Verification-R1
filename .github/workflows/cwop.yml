@@ -1,4 +1,4 @@
-name: Refresh CWOP APRS verification observations
+name: Refresh CWOP APRS station history
 
 on:
   schedule:
@@ -27,9 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install MADIS reader
-        run: pip install numpy netCDF4
-      - name: Build compact CWOP cache (R14)
+      - name: Build station-targeted CWOP history cache
         run: python scripts/build_cwop.py
       - name: Validate CWOP JSON
         shell: bash
