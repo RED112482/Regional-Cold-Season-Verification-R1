@@ -848,7 +848,8 @@ async function loadDcpSupplement(e,start,finish){
 }
 function scoreSupplementPoint(site,minTemp,minFeel,time,e,source,samples=[]){const county=findCountyForPoint(site.lon,site.lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e);let value=crit.metric==='apparent'?minFinite(minTemp,minFeel):minTemp,criterionMet=null;if(crit.metric!=='potfrost')criterionMet=isNum(value)&&isNum(crit.threshold)?value<=crit.threshold:null;const durationMinutes=crit.metric==='potfrost'?null:durationFromSamples(samples,crit),base={station:site.id,name:site.name,lat:site.lat,lon:site.lon,minTemp,minFeel,value,time,criterion:crit,source,hasData:isNum(value),criterionMet,durationMinutes};if(criterionMet===null)return Object.assign(base,{hit:null,resultCode:'SUPP',inHazard:eventContainsPoint(e,site.lon,site.lat)});const cls=classifyVerificationResult(base,e);return Object.assign(base,{hit:cls.hit,resultCode:cls.code,inHazard:cls.inHazard})}
 function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){
-  const usable=rows.filter(r=>r.hasData),display=usable.filter(r=>r.inHazard||r.criterionMet);
+  const usable=rows.filter(r=>r.hasData),
+        display=sourceKey==='CWOP'?usable:usable.filter(r=>r.inHazard||r.criterionMet);
   if(sourceKey){state.sourceCounts[sourceKey]=usable.length;updatePointSourceSummary()}
   if(!display.length)return;
   addVerificationTotals(display);
@@ -860,7 +861,7 @@ function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){
       .addTo(state.verificationLayer);
     if(code==='HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
   });
-  const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:7px"><b>'+esc(label)+'</b></div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · '+esc(r.source)+' · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
+  const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:7px"><b>'+esc(label)+'</b> · '+display.length+' plotted</div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · '+esc(r.source)+' · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
   list.insertAdjacentHTML('beforeend',hdr+body);
 }
 function scorePoint(a,e){
