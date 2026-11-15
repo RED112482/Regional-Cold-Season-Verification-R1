@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,7 @@ from pathlib import Path
 
 API = "https://api.synopticdata.com/v2"
 OUT = Path("site/data/cwop_recent.json")
+HAZARDS = Path("site/data/hazards/2026.kml")
 TOKEN = os.environ.get("SYNOPTIC_TOKEN", "").strip()
 CWAS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 NETWORK = "65"
@@ -54,6 +56,52 @@ def write_atomic(payload: dict):
     tmp.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     json.loads(tmp.read_text(encoding="utf-8"))
     tmp.replace(OUT)
+
+
+def recent_etn_windows(now: datetime, lookback_days: int = 7):
+    """Return merged recent cold-product ETN windows from the season KML."""
+    if not HAZARDS.exists():
+        return []
+    text = HAZARDS.read_text(encoding="utf-8", errors="ignore")
+    pat = re.compile(
+        r"<Placemark>.*?<name>([^<]+)</name>.*?"
+        r"<TimeSpan>\s*<begin>([^<]+)</begin>\s*<end>([^<]+)</end>\s*</TimeSpan>",
+        re.I | re.S,
+    )
+    cutoff = now - timedelta(days=lookback_days)
+    raw = []
+    for name, begin_s, end_s in pat.findall(text):
+        u = name.upper()
+        if not any(x in u for x in (
+            "FROST", "FREEZE", "COLD", "WIND CHILL", "HARD FREEZE",
+            ".FR.", ".FZ.", ".CW.", ".EC.", ".WC.", ".HZ.",
+        )):
+            continue
+        try:
+            begin = datetime.fromisoformat(begin_s.replace("Z", "+00:00"))
+            end = datetime.fromisoformat(end_s.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if end < cutoff or begin > now:
+            continue
+        # Small margin captures observations just outside nominal issuance
+        # boundaries without retaining full-day histories.
+        raw.append((max(begin, cutoff) - timedelta(minutes=30),
+                    min(end, now) + timedelta(minutes=30)))
+    if not raw:
+        return []
+    raw.sort()
+    merged = [list(raw[0])]
+    for begin, end in raw[1:]:
+        if begin <= merged[-1][1] + timedelta(minutes=30):
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([begin, end])
+    return [(a, b) for a, b in merged]
+
+
+def in_windows(dt: datetime, windows):
+    return any(a <= dt <= b for a, b in windows)
 
 
 def discover():
@@ -102,9 +150,19 @@ def main():
         raise SystemExit("SYNOPTIC_TOKEN is not set")
 
     now = datetime.now(timezone.utc)
-    start = now - timedelta(days=WINDOW_DAYS)
+    windows = recent_etn_windows(now, WINDOW_DAYS)
+    if windows:
+        start = min(a for a, _ in windows)
+        end = max(b for _, b in windows)
+    else:
+        start = now - timedelta(days=2)
+        end = now
     start_s = start.strftime("%Y%m%d%H%M")
-    end_s = now.strftime("%Y%m%d%H%M")
+    end_s = end.strftime("%Y%m%d%H%M")
+
+    print("ETN windows retained:", len(windows))
+    for a, b in windows:
+        print(" -", a.isoformat(), "to", b.isoformat())
 
     stations, errors = discover()
     print("Synoptic metadata stations discovered:", len(stations))
@@ -157,6 +215,12 @@ def main():
                     rh = num(rhs[i]) if i < len(rhs) else None
                     w = num(winds[i]) if i < len(winds) else None
                     g = num(gusts[i]) if i < len(gusts) else None
+                    try:
+                        dt = datetime.fromisoformat(str(times[i]).replace("Z", "+00:00"))
+                    except Exception:
+                        continue
+                    if windows and not in_windows(dt, windows):
+                        continue
                     obs_out.append({
                         "id": stid,
                         "name": meta["name"],
@@ -184,12 +248,16 @@ def main():
         "generatedUtc": now.isoformat().replace("+00:00", "Z"),
         "source": "Synoptic Data APRSWXNET/CWOP network 65",
         "windowDays": WINDOW_DAYS,
+        "eventWindows": [{"start": a.isoformat().replace("+00:00","Z"), "end": b.isoformat().replace("+00:00","Z")} for a,b in windows],
         "status": {
             "cwAs": CWAS,
             "network": NETWORK,
             "discoveredStations": len(stations),
             "stationsWithHistory": len(active_ids),
             "observations": len(observations),
+            "etnWindows": len(windows),
+            "queryStart": start_s,
+            "queryEnd": end_s,
             "batches": batches,
             "batchesSuccessful": batches_ok,
             "errors": errors[-20:],
