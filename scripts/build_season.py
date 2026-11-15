@@ -226,30 +226,53 @@ def fetch_station_catalog(counties: dict) -> dict:
 
     all_sites = []
     seen = set()
+
+    # Keep the seasonal-frequency station universe aligned with Season Products.
+    # Every site is assigned ONLY by the county polygon that physically contains
+    # its coordinates. No nearest-county substitution is permitted.
+    networks = []
     for state in states:
-        network = f"{state}_ASOS"
+        networks.extend([
+            (f"{state}_ASOS", state, "METAR"),
+            (f"{state}_RWIS", state, "RWIS"),
+            (f"{state}_DCP", state, "DCP"),
+            (f"{state}_COOP", state, "COOP"),
+        ])
+    networks.append(("USCRN", "", "USCRN"))
+
+    for network, state, source_type in networks:
         print(f"Fetching station metadata: {network}")
-        geo = fetch_network_geo(network)
+        try:
+            geo = fetch_network_geo(network)
+        except Exception as exc:
+            print(f"Warning: station metadata unavailable for {network}: {exc}", file=sys.stderr)
+            continue
         for feature in geo.get("features", []):
             site = station_from_feature(feature, network=network, state=state)
-            if not site or site["obs"] in seen:
+            if not site:
+                continue
+            key = (network, site["obs"])
+            if key in seen:
                 continue
             county = containing_county(site["lon"], site["lat"], counties)
             if not county or county["cwa"] not in WFO_IDS:
                 continue
-            seen.add(site["obs"])
+            seen.add(key)
             site["wfo"] = county["cwa"]
             site["countyFips"] = county["fips"]
             site["countyName"] = county["countyname"]
             if not site["state"]:
                 site["state"] = county["state"]
             upper_name = site["name"].upper()
-            if site["obs"] in asos_ids:
-                site["type"] = "ASOS"
-            elif "AWOS" in upper_name:
-                site["type"] = "AWOS"
+            if network.endswith("_ASOS"):
+                if site["obs"] in asos_ids:
+                    site["type"] = "ASOS"
+                elif "AWOS" in upper_name:
+                    site["type"] = "AWOS"
+                else:
+                    site["type"] = "METAR"
             else:
-                site["type"] = "METAR"
+                site["type"] = source_type
             all_sites.append(site)
 
     wfo_rank = {wfo: i for i, wfo in enumerate(WFO_IDS)}
@@ -298,7 +321,13 @@ def fetch_daily_summaries(all_sites: list[dict], start_date: str, end_date: str)
         ]
         url = IEM_BASE + "/cgi-bin/request/daily.py?" + urllib.parse.urlencode(params)
         print(f"Fetching daily summaries: {network} ({len(sites)} stations)")
-        text = request_text(url, "text/csv,text/plain")
+        try:
+            text = request_text(url, "text/csv,text/plain")
+        except Exception as exc:
+            # Some supplemental IEM networks do not expose daily.py for every
+            # variable/year. Keep the rest of the station universe usable.
+            print(f"Warning: daily summaries unavailable for {network}: {exc}", file=sys.stderr)
+            continue
         reader = csv.DictReader(io.StringIO(text))
         for row in reader:
             station = str(row.get("station") or row.get("id") or "").strip().upper()
@@ -377,13 +406,32 @@ def build_county_stats(counties: dict, sites: list[dict], daily_by_station: dict
             county_lat = county_lon = None
 
         county_sites = list(by_county.get(fips, []))
-        coverage = "inside"
+        coverage = "inside" if county_sites else "none"
         nearest_miles = None
-        if not county_sites and sites and county_lat is not None and county_lon is not None:
-            best = min(sites, key=lambda s: haversine_miles(county_lat, county_lon, s["lat"], s["lon"]))
-            nearest_miles = round(haversine_miles(county_lat, county_lon, best["lat"], best["lon"]), 1)
-            county_sites = [best]
-            coverage = "nearest"
+
+        # Retain per-station daily minima so a county click can identify every
+        # station that independently met the threshold on a given day.
+        station_daily = []
+        for site in county_sites:
+            st_temp = []
+            st_feel = []
+            for d in dates:
+                row = (daily_by_station.get(site["obs"]) or {}).get(d) or {}
+                t = row.get("minTemp")
+                f = row.get("minFeel")
+                st_temp.append(round(t, 1) if isinstance(t, (int, float)) else None)
+                st_feel.append(round(f, 1) if isinstance(f, (int, float)) else None)
+            station_daily.append({
+                "id": site["displayId"],
+                "obs": site["obs"],
+                "name": site["name"],
+                "type": site["type"],
+                "network": site.get("network") or "",
+                "lat": site["lat"],
+                "lon": site["lon"],
+                "dailyMinTemp": st_temp,
+                "dailyMinFeel": st_feel,
+            })
 
         daily_temp = []
         daily_feel = []
@@ -423,11 +471,13 @@ def build_county_stats(counties: dict, sites: list[dict], daily_by_station: dict
                     "obs": s["obs"],
                     "name": s["name"],
                     "type": s["type"],
+                    "network": s.get("network") or "",
                     "lat": s["lat"],
                     "lon": s["lon"],
                 }
                 for s in county_sites
             ],
+            "stationDaily": station_daily,
             "criteria": criteria,
             "dailyMinTemp": daily_temp,
             "dailyMinFeel": daily_feel,
