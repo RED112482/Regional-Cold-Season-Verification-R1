@@ -299,6 +299,16 @@ def chunked(items, n):
 
 
 
+def sane_air_temp_f(value):
+    n = num(value)
+    return n if n is not None and -30.0 <= n <= 130.0 else None
+
+
+def sane_apparent_f(value):
+    n = num(value)
+    return n if n is not None and -60.0 <= n <= 140.0 else None
+
+
 def wind_chill_f(temp_f, wind_kt):
     if temp_f is None:
         return None
@@ -333,6 +343,22 @@ def update_daily_archive(stations, now):
     query_end = now
 
     daily = archive.get("stations") if isinstance(archive.get("stations"), dict) else {}
+
+    # Purge bad historical sentinel/sensor values already persisted by older
+    # builds so they cannot continue to qualify as cold-weather hits.
+    for stid, days in list(daily.items()):
+        if not isinstance(days, dict):
+            daily[stid] = {}
+            continue
+        for day, rec in list(days.items()):
+            if not isinstance(rec, dict):
+                del days[day]
+                continue
+            rec["minTemp"] = sane_air_temp_f(rec.get("minTemp"))
+            rec["minFeel"] = sane_apparent_f(rec.get("minFeel"))
+            if rec["minTemp"] is None and rec["minFeel"] is None:
+                del days[day]
+
     metadata = {str(x.get("id")): x for x in (archive.get("metadata") or []) if x.get("id")}
     for stid, meta in stations.items():
         metadata[stid] = {
@@ -377,7 +403,7 @@ def update_daily_archive(stations, now):
                     winds = first_series(obs, "wind_speed") or []
                     station_days = daily.setdefault(stid, {})
                     for i, ts in enumerate(times):
-                        t = num(temps[i]) if i < len(temps) else None
+                        t = sane_air_temp_f(temps[i]) if i < len(temps) else None
                         if t is None:
                             continue
                         w = num(winds[i]) if i < len(winds) else None
@@ -386,7 +412,7 @@ def update_daily_archive(stations, now):
                         except Exception:
                             continue
                         day = dt.astimezone(LOCAL_TZ).date().isoformat()
-                        feel = wind_chill_f(t, w)
+                        feel = sane_apparent_f(wind_chill_f(t, w))
                         rec = station_days.setdefault(day, {"minTemp": None, "minFeel": None})
                         if rec.get("minTemp") is None or t < rec["minTemp"]:
                             rec["minTemp"] = round(t, 1)
@@ -492,7 +518,7 @@ def main():
 
                 n = len(times)
                 for i in range(n):
-                    t = num(temps[i]) if i < len(temps) else None
+                    t = sane_air_temp_f(temps[i]) if i < len(temps) else None
                     if t is None:
                         continue
                     td = num(dews[i]) if i < len(dews) else None
