@@ -14,10 +14,13 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 API = "https://api.synopticdata.com/v2"
 OUT = Path("site/data/cwop_recent.json")
 OUT_DIR = Path("site/data/cwop")
+DAILY_OUT = Path("site/data/cwop_daily.json")
+LOCAL_TZ = ZoneInfo("America/Chicago")
 HAZARDS = Path("site/data/hazards/2026.kml")
 TOKEN = os.environ.get("SYNOPTIC_TOKEN", "").strip()
 CWAS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
@@ -187,6 +190,121 @@ def chunked(items, n):
         yield items[i:i+n]
 
 
+
+def wind_chill_f(temp_f, wind_kt):
+    if temp_f is None:
+        return None
+    if wind_kt is None:
+        return temp_f
+    mph = wind_kt * 1.150779
+    if temp_f > 50 or mph < 3:
+        return temp_f
+    return 35.74 + 0.6215 * temp_f - 35.75 * (mph ** 0.16) + 0.4275 * temp_f * (mph ** 0.16)
+
+
+def current_season_start(now):
+    local = now.astimezone(LOCAL_TZ)
+    year = local.year if local.month >= 6 else local.year - 1
+    return datetime(year, 9, 1, 0, 0, tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+
+
+def update_daily_archive(stations, now):
+    """Persist compact per-station daily minima for Cold Weather Frequency."""
+    if DAILY_OUT.exists():
+        try:
+            archive = json.loads(DAILY_OUT.read_text(encoding="utf-8"))
+        except Exception:
+            archive = {}
+    else:
+        archive = {}
+
+    season_start = current_season_start(now)
+    season_key = season_start.astimezone(LOCAL_TZ).strftime("%Y")
+    complete = str(archive.get("backfillCompleteSeason") or "") == season_key
+    query_start = (now - timedelta(days=2)) if complete else season_start
+    query_end = now
+
+    daily = archive.get("stations") if isinstance(archive.get("stations"), dict) else {}
+    metadata = {str(x.get("id")): x for x in (archive.get("metadata") or []) if x.get("id")}
+    for stid, meta in stations.items():
+        metadata[stid] = {
+            "id": stid,
+            "name": meta.get("name") or stid,
+            "lat": round(meta["lat"], 5),
+            "lon": round(meta["lon"], 5),
+            "cwa": meta.get("cwa") or "",
+            "provider": "Synoptic APRSWXNET/CWOP",
+        }
+
+    step = timedelta(days=7)
+    cursor = query_start
+    request_count = 0
+    while cursor < query_end:
+        window_end = min(query_end, cursor + step)
+        start_s = cursor.strftime("%Y%m%d%H%M")
+        end_s = window_end.strftime("%Y%m%d%H%M")
+        print("CWOP daily archive window:", cursor.isoformat(), "to", window_end.isoformat())
+        for ids_batch in chunked(sorted(stations), BATCH):
+            request_count += 1
+            try:
+                d = get_json("stations/timeseries", {
+                    "stid": ",".join(ids_batch),
+                    "start": start_s,
+                    "end": end_s,
+                    "vars": "air_temp,wind_speed",
+                    "units": "english,speed|kts",
+                    "obtimezone": "UTC",
+                    "qc_checks": "synopticlabs,madis",
+                    "showemptyvars": "1",
+                })
+                if str((d.get("SUMMARY") or {}).get("RESPONSE_CODE", "")) != "1":
+                    continue
+                for row in d.get("STATION", []) or []:
+                    stid = str(row.get("STID") or "").strip()
+                    if not stid:
+                        continue
+                    obs = row.get("OBSERVATIONS") or {}
+                    times = obs.get("date_time") or []
+                    temps = first_series(obs, "air_temp") or []
+                    winds = first_series(obs, "wind_speed") or []
+                    station_days = daily.setdefault(stid, {})
+                    for i, ts in enumerate(times):
+                        t = num(temps[i]) if i < len(temps) else None
+                        if t is None:
+                            continue
+                        w = num(winds[i]) if i < len(winds) else None
+                        try:
+                            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                        except Exception:
+                            continue
+                        day = dt.astimezone(LOCAL_TZ).date().isoformat()
+                        feel = wind_chill_f(t, w)
+                        rec = station_days.setdefault(day, {"minTemp": None, "minFeel": None})
+                        if rec.get("minTemp") is None or t < rec["minTemp"]:
+                            rec["minTemp"] = round(t, 1)
+                        if feel is not None and (rec.get("minFeel") is None or feel < rec["minFeel"]):
+                            rec["minFeel"] = round(feel, 1)
+            except Exception as exc:
+                print("CWOP daily archive batch failed:", type(exc).__name__, exc)
+        cursor = window_end
+
+    archive = {
+        "generatedUtc": now.isoformat().replace("+00:00", "Z"),
+        "source": "Synoptic Data APRSWXNET/CWOP network 65",
+        "seasonStart": season_start.astimezone(LOCAL_TZ).date().isoformat(),
+        "backfillCompleteSeason": season_key,
+        "metadata": [metadata[k] for k in sorted(metadata)],
+        "stations": daily,
+        "status": {"requests": request_count, "stationCount": len(stations)},
+    }
+    DAILY_OUT.parent.mkdir(parents=True, exist_ok=True)
+    tmp = DAILY_OUT.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(archive, separators=(",", ":")), encoding="utf-8")
+    json.loads(tmp.read_text(encoding="utf-8"))
+    tmp.replace(DAILY_OUT)
+    print("CWOP daily archive:", len(daily), "stations", DAILY_OUT.stat().st_size, "bytes")
+
+
 def main():
     if not TOKEN:
         raise SystemExit("SYNOPTIC_TOKEN is not set")
@@ -223,6 +341,7 @@ def main():
 
     stations, errors = discover()
     print("Synoptic CWOP stations discovered:", len(stations))
+    update_daily_archive(stations, now)
     if errors:
         print("Synoptic discovery/errors:")
         for e in errors:
