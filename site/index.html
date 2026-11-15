@@ -536,6 +536,56 @@ async function renderVerification(){
   document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Green = best rolling performance, red = worst. NDFD keeps an additional glow/outline so it remains easy to track. '+(root.leadLabel||'');
 }
 
+function strictFrequencyCountyForPoint(data,lon,lat){
+  if(!data||!data.countiesGeoJson||!isNum(Number(lon))||!isNum(Number(lat)))return null;
+  return (data.countiesGeoJson.features||[]).find(f=>pointInFeature(Number(lon),Number(lat),f))||null;
+}
+function normalizeFrequencyStationsStrict(data){
+  if(!data||!data.countyStats||!data.countiesGeoJson)return;
+  const dates=data.dates||[],all=[],seen=new Set();
+
+  // Gather every station history first, then throw away all preassigned county
+  // ownership. County membership is recalculated solely from the station's
+  // actual lat/lon against the NOAA county polygons.
+  Object.values(data.countyStats).forEach(row=>{
+    const dailyByKey=new Map((row.stationDaily||[]).map(st=>[String(st.network||'')+'|'+String(st.obs||st.id||''),st]));
+    (row.stations||[]).forEach(meta=>{
+      const key=String(meta.network||'')+'|'+String(meta.obs||meta.id||'');
+      const d=dailyByKey.get(key);
+      if(d)Object.assign(d,{lat:num(d.lat??meta.lat),lon:num(d.lon??meta.lon)});
+    });
+    (row.stationDaily||[]).forEach(st=>{
+      const key=String(st.network||'')+'|'+String(st.obs||st.id||'');
+      if(seen.has(key))return;
+      seen.add(key);
+      if(isNum(num(st.lat))&&isNum(num(st.lon)))all.push(st);
+    });
+    row.stations=[];
+    row.stationDaily=[];
+    row.dailyMinTemp=Array(dates.length).fill(null);
+    row.dailyMinFeel=Array(dates.length).fill(null);
+    row.coverage='none';
+    row.nearestMiles=null;
+  });
+
+  for(const st of all){
+    const feature=strictFrequencyCountyForPoint(data,num(st.lon),num(st.lat));
+    if(!feature)continue;
+    const fips=String((feature.properties||{}).fips||'').padStart(5,'0'),row=data.countyStats[fips];
+    if(!row)continue;
+    const meta={id:st.id||st.obs,obs:st.obs||st.id,name:st.name||st.id||st.obs,type:st.type||'OBS',network:st.network||'',lat:num(st.lat),lon:num(st.lon)};
+    row.stations.push(meta);
+    row.stationDaily.push(st);
+    row.coverage='inside';
+    const tt=st.dailyMinTemp||[],ff=st.dailyMinFeel||[];
+    for(let i=0;i<dates.length;i++){
+      const t=num(tt[i]),f=num(ff[i]);
+      if(isNum(t))row.dailyMinTemp[i]=minFinite(num(row.dailyMinTemp[i]),t);
+      if(isNum(f))row.dailyMinFeel[i]=minFinite(num(row.dailyMinFeel[i]),f);
+    }
+  }
+}
+
 async function mergeCwopDailyIntoFrequency(data){
   if(!data||!data.countiesGeoJson||!data.countyStats)return;
   try{
@@ -545,15 +595,21 @@ async function mergeCwopDailyIntoFrequency(data){
     for(const meta of (p.metadata||[])){
       const lon=num(meta.lon),lat=num(meta.lat),stid=String(meta.id||'').trim();
       if(!stid||!isNum(lon)||!isNum(lat))continue;
-      const feature=(data.countiesGeoJson.features||[]).find(f=>pointInFeature(lon,lat,f));
+      const feature=strictFrequencyCountyForPoint(data,lon,lat);
       if(!feature)continue;
       const fips=String((feature.properties||{}).fips||'').padStart(5,'0'),row=data.countyStats[fips];
       if(!row)continue;
       const days=(p.stations||{})[stid]||{},stTemp=Array(dates.length).fill(null),stFeel=Array(dates.length).fill(null);
       Object.entries(days).forEach(([d,v])=>{const ix=dateIndex.get(d);if(ix===undefined)return;const t=num(v&&v.minTemp),f=num(v&&v.minFeel);if(isNum(t))stTemp[ix]=t;if(isNum(f))stFeel[ix]=f});
       if(!stTemp.some(isNum)&&!stFeel.some(isNum))continue;
+      // Remove this CWOP id from every county first; it is then assigned only
+      // to the single polygon that contains its coordinates.
+      Object.values(data.countyStats).forEach(other=>{
+        other.stations=(other.stations||[]).filter(x=>String(x.obs||x.id)!==stid);
+        other.stationDaily=(other.stationDaily||[]).filter(x=>String(x.obs||x.id)!==stid);
+      });
       row.stations=row.stations||[];row.stationDaily=row.stationDaily||[];
-      if(!row.stations.some(x=>String(x.obs||x.id)===stid))row.stations.push({id:stid,obs:stid,name:meta.name||stid,type:'CWOP',network:'SYNOPTIC_CWOP',lat,lon});
+      row.stations.push({id:stid,obs:stid,name:meta.name||stid,type:'CWOP',network:'SYNOPTIC_CWOP',lat,lon});
       const existing=row.stationDaily.find(x=>String(x.obs||x.id)===stid);
       const st={id:stid,obs:stid,name:meta.name||stid,type:'CWOP',network:'SYNOPTIC_CWOP',lat,lon,dailyMinTemp:stTemp,dailyMinFeel:stFeel};
       if(existing)Object.assign(existing,st);else row.stationDaily.push(st);
@@ -580,6 +636,7 @@ async function loadSeason(){
     if(response.ok){
       const data=await response.json();
       data.countiesGeoJson=await countiesResponse.json();
+      normalizeFrequencyStationsStrict(data);
       await mergeCwopDailyIntoFrequency(data);
       state.data=data;
       initializeTimeline();
@@ -631,8 +688,10 @@ function addFrequencyLegend(){const ctl=L.control({position:'bottomright'});ctl.
 function stationValueForIndex(st,i){const t=(st.dailyMinTemp||[])[i],f=(st.dailyMinFeel||[])[i];return(state.selectedMode==='cwa'||state.selectedMode==='ecw')?minFinite(t,f):t}
 function stationQualifiesForIndex(st,s,i){const t=(st.dailyMinTemp||[])[i],f=(st.dailyMinFeel||[])[i],a=minFinite(t,f);if(state.selectedMode==='custom')return isNum(t)&&t<=state.threshold;if(state.selectedMode==='frost')return isNum(t)&&t<=37;if(state.selectedMode==='freeze')return isNum(t)&&t<=32;if(state.selectedMode==='hardfreeze')return isNum(t)&&t<=25;if(state.selectedMode==='cwa')return isNum(a)&&isNum(s.criteria.coldAdvisory)&&a<=s.criteria.coldAdvisory;if(state.selectedMode==='ecw')return isNum(a)&&isNum(s.criteria.extremeCold)&&a<=s.criteria.extremeCold;return false}
 function countyPopup(s){
-  const dates=hitDatesThrough(s,state.timelineIndex),streak=latestStreak(dates),minT=minArray((s.dailyMinTemp||[]).slice(0,state.timelineIndex+1)),minF=minArray((s.dailyMinFeel||[]).slice(0,state.timelineIndex+1)),stations=(s.stations||[]).map(x=>x.id+' ('+x.type+')').join(', ')||'None',age=daysSinceLastHit(s,state.timelineIndex),last=lastHitDateThrough(s,state.timelineIndex);
-  const stationDaily=s.stationDaily||[],qualifying=[];
+  const dates=hitDatesThrough(s,state.timelineIndex),streak=latestStreak(dates),minT=minArray((s.dailyMinTemp||[]).slice(0,state.timelineIndex+1)),minF=minArray((s.dailyMinFeel||[]).slice(0,state.timelineIndex+1)),age=daysSinceLastHit(s,state.timelineIndex),last=lastHitDateThrough(s,state.timelineIndex);
+  const countyFeature=(state.data.countiesGeoJson.features||[]).find(f=>String((f.properties||{}).fips||'').padStart(5,'0')===String(s.fips||'').padStart(5,'0'));
+  const stationDaily=(s.stationDaily||[]).filter(st=>countyFeature&&isNum(num(st.lon))&&isNum(num(st.lat))&&pointInFeature(num(st.lon),num(st.lat),countyFeature)),qualifying=[],
+        stations=stationDaily.map(x=>(x.id||x.obs)+' ('+(x.type||'OBS')+')').join(', ')||'None';
   for(let i=0;i<=state.timelineIndex;i++){
     const day=state.data.dates[i];
     const rows=stationDaily.filter(st=>stationQualifiesForIndex(st,s,i)).map(st=>esc(st.id)+' '+esc(st.name)+' · '+fmt(stationValueForIndex(st,i))+'°F');
@@ -684,12 +743,16 @@ function classifyVerificationResult(r,e){
 }
 function verificationValueText(r){
   if(!r||!r.hasData)return'—';
+  // Keep the plotted/readout value consistent across every source. For frost
+  // verification, the user-facing station value is the registered low
+  // temperature; PotFrost remains available in the popup as the criterion.
   if(r.criterion&&r.criterion.metric==='potfrost'){
-    if(isNum(r.value))return'PF '+fmt(r.value);
-    if(isNum(r.minTemp))return'T '+fmt(r.minTemp)+'°F';
+    if(isNum(r.minTemp))return fmt(r.minTemp)+'°F';
     return'—';
   }
-  return fmt(r.value)+'°F';
+  if(isNum(r.value))return fmt(r.value)+'°F';
+  if(isNum(r.minTemp))return fmt(r.minTemp)+'°F';
+  return'—';
 }
 function durationText(minutes){
   if(!isNum(minutes)||minutes<=0)return'0m';
@@ -846,7 +909,7 @@ function renderCoopSupplement(rows){
       .bindTooltip(r.station+' · COOP · '+verificationValueText(r)+(code==='OUTSIDE'||code==='SUPP'?'':' · '+code),{sticky:true,className:'county-tip'})
       .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.network)+' · COOP 24-hour low</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Value source</span><strong>'+esc(r.valueSource||'—')+'</strong><span>Station checked</span><strong>YES</strong><span>Instantaneous low</span><strong>'+fmt(r.minInstantTemp)+'°F</strong><span>METAR 6-h min</span><strong>'+fmt(r.min6hTemp)+'°F</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Result</span><strong>'+code+'</strong></div>')
       .addTo(state.verificationLayer);
-    if(code==='HIT'||code==='NO HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
+    addVerificationMapLabel(r,r.lat,r.lon);
   });
   const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:6px"><b>COOP · 24-hour lows</b></div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · COOP'+(r.inHazard?' · INSIDE ETN':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='NO HIT'?'warn':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
   list.insertAdjacentHTML('beforeend',hdr+body);
@@ -901,7 +964,7 @@ function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){
       .bindTooltip(r.station+' · '+r.source+' · '+verificationValueText(r)+(code==='OUTSIDE'||code==='SUPP'?'':' · '+code)+(isNum(r.durationMinutes)&&code!=='OUTSIDE'&&code!=='SUPP'?' · '+durationText(r.durationMinutes)+' in criteria':''),{sticky:true,className:'county-tip'})
       .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.source)+'</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Air temperature low</span><strong>'+fmt(r.minTemp)+'°F</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Duration in criteria</span><strong>'+(isNum(r.durationMinutes)?durationText(r.durationMinutes):'—')+'</strong><span>Result</span><strong>'+code+'</strong></div>')
       .addTo(state.verificationLayer);
-    if(code==='HIT'||code==='NO HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
+    addVerificationMapLabel(r,r.lat,r.lon);
   });
   const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:7px"><b>'+esc(label)+'</b> · '+display.length+' plotted</div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · '+esc(r.source)+(r.inHazard?' · INSIDE ETN':'')+(isNum(r.durationMinutes)&&r.resultCode!=='OUTSIDE'&&r.resultCode!=='SUPP'?' · '+durationText(r.durationMinutes)+' in criteria':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='NO HIT'?'warn':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
   list.insertAdjacentHTML('beforeend',hdr+body);
