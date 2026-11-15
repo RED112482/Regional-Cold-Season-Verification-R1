@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Build station-targeted CWOP history cache (TLS fallback)
+      - name: Build station-targeted CWOP history cache (aprs.fi fallback)
         run: python scripts/build_cwop.py
       - name: Validate CWOP JSON
         shell: bash
@@ -51,11 +51,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cp site/data/cwop_recent.json /tmp/cwop_recent.json
+          if [ -f site/data/cwop_aprsfi_diagnostic.html ]; then
+            cp site/data/cwop_aprsfi_diagnostic.html /tmp/cwop_aprsfi_diagnostic.html
+          fi
           git fetch origin main
           git reset --hard origin/main
           mkdir -p site/data
           cp /tmp/cwop_recent.json site/data/cwop_recent.json
-          git add site/data/cwop_recent.json
+          if [ -f /tmp/cwop_aprsfi_diagnostic.html ]; then
+            cp /tmp/cwop_aprsfi_diagnostic.html site/data/cwop_aprsfi_diagnostic.html
+          else
+            rm -f site/data/cwop_aprsfi_diagnostic.html
+          fi
+          git add site/data/cwop_recent.json site/data/cwop_aprsfi_diagnostic.html || true
           if git diff --cached --quiet; then
             echo "CWOP data unchanged."
           else
