@@ -60,7 +60,7 @@
     .timeline-date{margin-left:auto;font-size:12px;font-weight:800;color:#8ce8ff;display:flex;align-items:center}
     .timeline-slider{width:100%;accent-color:#8ce8ff}.timeline-nav{display:grid;grid-template-columns:38px 1fr 38px;gap:6px;margin-top:7px}.timeline-nav button{height:31px}.timeline-nav button:hover{border-color:#8ce8ff}
     .point-list{display:grid;gap:5px;margin-top:8px;max-height:230px;overflow:auto}.point-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:center;padding:6px 7px;border:1px solid #2f4862;background:#091522;border-radius:7px;font-size:9.5px}
-    .point-row strong{font-size:11px}.point-row .hit{color:#7ff0ae}.point-row .miss{color:#ff9ba5}.point-row .nodata{color:#9fb2c6}.point-row small{display:block;color:#8fa5ba;font-size:8px}
+    .point-row strong{font-size:11px}.point-row .hit{color:#7ff0ae}.point-row .warn{color:#ffd84d}.point-row .miss{color:#ff9ba5}.point-row .nodata{color:#9fb2c6}.point-row small{display:block;color:#8fa5ba;font-size:8px}
     .point-note{font-size:8px;color:#90a8bd;line-height:1.4;margin-top:7px}.live-tag{display:inline-block;border-radius:999px;padding:2px 6px;background:rgba(0,229,255,.13);color:#8ce8ff;font-size:8px;font-weight:800;margin-left:5px}
     .event-source-link{display:inline-block;margin-top:7px;color:#8ce8ff;font-size:9px;font-weight:700;text-decoration:none}
 
@@ -105,6 +105,7 @@
     .verify-map-label .vlabel{display:flex;align-items:center;gap:4px;white-space:nowrap;font-family:Poppins,sans-serif;font-size:10px;font-weight:900;text-shadow:0 1px 2px #000,0 0 4px #000}
     .verify-map-label .vvalue{padding:2px 5px;border-radius:5px;background:rgba(5,14,24,.88);border:1px solid rgba(220,240,255,.35);color:#fff}
     .verify-map-label .vhit{padding:2px 5px;border-radius:5px;background:#153f2d;border:1px solid #58efa1;color:#74ffb4;box-shadow:0 0 7px rgba(88,239,161,.45)}
+    .verify-map-label .vwarn{padding:2px 5px;border-radius:5px;background:#4a3c12;border:1px solid #ffd84d;color:#ffe981;box-shadow:0 0 7px rgba(255,216,77,.42)}
     .verify-map-label .vmiss{padding:2px 5px;border-radius:5px;background:#4a1b24;border:1px solid #ff7185;color:#ff91a1;box-shadow:0 0 7px rgba(255,113,133,.38)}
     .verify-map-label .vdur{padding:2px 4px;border-radius:5px;background:rgba(9,28,44,.9);border:1px solid #4c7b9c;color:#bde6ff;font-size:8px}
     .duration-toggle{margin-top:7px;padding-top:7px;border-top:1px solid #29435d}
@@ -197,7 +198,7 @@
           <label class="toggle"><input id="showVerificationLabels" type="checkbox" checked> Show values + HIT/MISS on map</label>
           <label class="toggle"><input id="showVerificationDuration" type="checkbox"> Show duration in criteria</label>
         </div>
-        <div id="pointSourceSummary" class="small" style="margin:5px 0 8px;color:#9fc5d9;font-weight:700">METAR 0 · COOP 0 · RWIS 0 · USCRN 0 · DCP 0 · CWOP 0</div><div class="product-summary"><div class="card"><span>Relevant verified points</span><strong id="eventCountyCount">—</strong></div><div class="card"><span>HIT / MISS</span><strong id="eventHitCount">—</strong></div></div><div id="pointList" class="point-list"></div><div class="point-note">Primary verification queries all available IEM airport ASOS/AWOS/METAR sites across the selected CWA during the exact VTEC valid period, merging the static catalog with current IEM state-network metadata. For temperature hazards it uses the colder of the instantaneous temperature and any METAR-reported 6-hour minimum, preventing valid lows from being missed. IEM station metadata supplies plotted coordinates; RWIS and other supplemental networks add additional surface coverage when available. All usable networks are displayed and counted with the same spatial HIT/MISS convention when they contain the variables needed for that hazard. COOP uses a 24-hour low; RWIS/USCRN/DCP use the exact VTEC window when available. DCP sites are included only when an air-temperature (TA) series is available. Synoptic CWOP/APRS stations are also included; for Frost Advisory they use station T/Td/wind plus a nearby-in-time METAR sky-cover proxy when available. Stations across the entire CWA are checked. Airport sites are always drawn so you can audit whether each station was included; criterion hits outside the selected ETN are flagged as MISSES. Frost Advisory verification uses observed-condition PotFrost from METAR temperature, dewpoint, wind and cloud cover; only Areas/Widespread (≥40) counts as a hit.</div></div>
+        <div id="pointSourceSummary" class="small" style="margin:5px 0 8px;color:#9fc5d9;font-weight:700">METAR 0 · COOP 0 · RWIS 0 · USCRN 0 · DCP 0 · CWOP 0</div><div class="product-summary"><div class="card"><span>Relevant verified points</span><strong id="eventCountyCount">—</strong></div><div class="card"><span>HIT / MISS</span><strong id="eventHitCount">—</strong></div></div><div id="pointList" class="point-list"></div><div class="point-note">Primary verification queries all available IEM airport ASOS/AWOS/METAR sites across the selected CWA during the exact VTEC valid period, merging the static catalog with current IEM state-network metadata. For temperature hazards it uses the colder of the instantaneous temperature and any METAR-reported 6-hour minimum, preventing valid lows from being missed. IEM station metadata supplies plotted coordinates; RWIS and other supplemental networks add additional surface coverage when available. All usable networks use the same verification colors: green = threshold hit inside the issued hazard, yellow = issued hazard but threshold not hit, and red = threshold hit outside the issued hazard. COOP uses a 24-hour low; RWIS/USCRN/DCP use the exact VTEC window when available. DCP sites are included only when an air-temperature (TA) series is available. Synoptic CWOP/APRS stations are also included; for Frost Advisory they use station T/Td/wind plus a nearby-in-time METAR sky-cover proxy when available. Stations across the entire CWA are checked. Airport sites are always drawn so you can audit whether each station was included; criterion hits outside the selected ETN are flagged as MISSES. Frost Advisory verification uses observed-condition PotFrost from METAR temperature, dewpoint, wind and cloud cover; only Areas/Widespread (≥40) counts as a hit.</div></div>
       <div id="warningBox2" class="warning"></div>
     </aside>
     <div class="map-wrap"><div id="productsMap" class="map"></div><div id="status2" class="status"></div></div>
@@ -679,7 +680,7 @@ function addVerificationMapLabel(r,lat,lon){
 
   const showDur=document.getElementById('showVerificationDuration')?.checked,
         result=r.hasData?(r.resultCode||'NO HIT'):'NO DATA',
-        cls=result==='HIT'?'vhit':result==='MISS'?'vmiss':'vdur',
+        cls=result==='HIT'?'vhit':result==='NO HIT'?'vwarn':result==='MISS'?'vmiss':'vdur',
         dur=showDur&&isNum(r.durationMinutes)?'<span class="vdur">'+durationText(r.durationMinutes)+'</span>':'',
         html='<div class="vlabel"><span class="vvalue">'+esc(verificationValueText(r))+'</span><span class="'+cls+'">'+result+'</span>'+dur+'</div>';
   L.marker([lat,lon],{interactive:false,icon:L.divIcon({className:'verify-map-label',html,iconSize:[170,24],iconAnchor:[-9,12]})}).addTo(state.verificationLayer);
@@ -799,14 +800,14 @@ function renderCoopSupplement(rows){
   if(!display.length)return;
   addVerificationTotals(display);
   display.forEach(r=>{
-    const code=r.resultCode||'SUPP',color=code==='HIT'?'#4bf0a0':code==='MISS'?'#ff647a':'#b6a76f',edge=code==='HIT'?'#d9ffeb':code==='MISS'?'#ffe0e5':'#fff1bd';
+    const code=r.resultCode||'SUPP',color=code==='HIT'?'#4bf0a0':code==='NO HIT'?'#ffd84d':code==='MISS'?'#ff647a':'#8093a7',edge=code==='HIT'?'#d9ffeb':code==='NO HIT'?'#fff2a6':code==='MISS'?'#ffe0e5':'#d2dbe4';
     L.circleMarker([r.lat,r.lon],{radius:6,color:edge,weight:2,fillColor:color,fillOpacity:.94,dashArray:'2,2'})
       .bindTooltip(r.station+' · COOP · '+verificationValueText(r)+' · '+code,{sticky:true,className:'county-tip'})
       .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.network)+' · COOP 24-hour low</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Value source</span><strong>'+esc(r.valueSource||'—')+'</strong><span>Station checked</span><strong>YES</strong><span>Instantaneous low</span><strong>'+fmt(r.minInstantTemp)+'°F</strong><span>METAR 6-h min</span><strong>'+fmt(r.min6hTemp)+'°F</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Result</span><strong>'+code+'</strong></div>')
       .addTo(state.verificationLayer);
-    if(code==='HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
+    if(code==='HIT'||code==='NO HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
   });
-  const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:6px"><b>COOP · 24-hour lows</b></div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · COOP · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
+  const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:6px"><b>COOP · 24-hour lows</b></div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · COOP · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='NO HIT'?'warn':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
   list.insertAdjacentHTML('beforeend',hdr+body);
 }
 
@@ -854,14 +855,14 @@ function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){
   if(!display.length)return;
   addVerificationTotals(display);
   display.forEach(r=>{
-    const code=r.resultCode||'SUPP',color=code==='HIT'?'#4bf0a0':code==='MISS'?'#ff647a':fillColor,edge=code==='HIT'?'#d9ffeb':code==='MISS'?'#ffe0e5':borderColor;
+    const code=r.resultCode||'SUPP',color=code==='HIT'?'#4bf0a0':code==='NO HIT'?'#ffd84d':code==='MISS'?'#ff647a':fillColor,edge=code==='HIT'?'#d9ffeb':code==='NO HIT'?'#fff2a6':code==='MISS'?'#ffe0e5':borderColor;
     L.circleMarker([r.lat,r.lon],{radius:6.5,color:edge,weight:2,fillColor:color,fillOpacity:.94,dashArray:'3,2'})
       .bindTooltip(r.station+' · '+r.source+' · '+verificationValueText(r)+' · '+code+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':''),{sticky:true,className:'county-tip'})
       .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.source)+'</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Air temperature low</span><strong>'+fmt(r.minTemp)+'°F</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Duration in criteria</span><strong>'+(isNum(r.durationMinutes)?durationText(r.durationMinutes):'—')+'</strong><span>Result</span><strong>'+code+'</strong></div>')
       .addTo(state.verificationLayer);
-    if(code==='HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
+    if(code==='HIT'||code==='NO HIT'||code==='MISS')addVerificationMapLabel(r,r.lat,r.lon);
   });
-  const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:7px"><b>'+esc(label)+'</b> · '+display.length+' plotted</div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · '+esc(r.source)+' · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
+  const list=document.getElementById('pointList'),hdr='<div class="small" style="margin-top:7px"><b>'+esc(label)+'</b> · '+display.length+' plotted</div>',body=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station)+'</b><small>'+esc(r.name)+' · '+esc(r.source)+' · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='NO HIT'?'warn':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.resultCode||'SUPP')+'</span></div>').join('');
   list.insertAdjacentHTML('beforeend',hdr+body);
 }
 function scorePoint(a,e){
@@ -890,24 +891,24 @@ function observedPotFrostScore(t,td,windKt,skyCode){
   return 0;
 }
 function pointCriterion(st,e){const c=st.criteria||{};if(e.type==='Frost Advisory')return{threshold:40,metric:'potfrost',label:'Observed PotFrost ≥40 (Areas/Widespread)'};if(e.type==='Freeze Watch'||e.type==='Freeze Warning')return{threshold:32,metric:'temp',label:'Freeze ≤32°F'};if(e.type==='Cold Weather Advisory')return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Local Cold Advisory'};if(e.type==='Extreme Cold Watch'||e.type==='Extreme Cold Warning')return{threshold:num(c.extremeCold),metric:'apparent',label:'Local Extreme Cold'};if(e.type==='Legacy Hard Freeze')return{threshold:25,metric:'temp',label:'Hard freeze ≤25°F'};return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Legacy wind chill proxy'}}
-function resetVerificationTotals(){state.verificationTotals={points:0,hits:0,misses:0}}
+function resetVerificationTotals(){state.verificationTotals={points:0,hits:0,warnings:0,misses:0}}
 function addVerificationTotals(rows){
   if(!state.verificationTotals)resetVerificationTotals();
   (rows||[]).forEach(r=>{
     if(!r||!r.hasData)return;
     if(r.resultCode==='HIT'){state.verificationTotals.points++;state.verificationTotals.hits++}
     else if(r.resultCode==='MISS'){state.verificationTotals.points++;state.verificationTotals.misses++}
-    else if(r.resultCode==='NO HIT'){state.verificationTotals.points++}
+    else if(r.resultCode==='NO HIT'){state.verificationTotals.points++;state.verificationTotals.warnings++}
   });
   document.getElementById('eventCountyCount').textContent=state.verificationTotals.points;
-  document.getElementById('eventHitCount').textContent=state.verificationTotals.hits+' HIT · '+state.verificationTotals.misses+' MISS';
+  document.getElementById('eventHitCount').textContent=state.verificationTotals.hits+' GREEN · '+state.verificationTotals.warnings+' YELLOW · '+state.verificationTotals.misses+' RED';
 }
 function renderEventPointResults(e,results){
   state.verificationLayer.clearLayers();
   const usable=results.filter(r=>r.hasData),display=results.filter(r=>r.station&&isNum(r.station.lat)&&isNum(r.station.lon)),hits=display.filter(r=>r.resultCode==='HIT').length,misses=display.filter(r=>r.resultCode==='MISS').length;
   state.sourceCounts.METAR=usable.length;updatePointSourceSummary();
   display.forEach(r=>{
-    const code=r.hasData?(r.resultCode||'NO HIT'):'NO DATA',s=r.station,color=code==='HIT'?'#4bf0a0':code==='MISS'?'#ff647a':code==='NO DATA'?'#3d4b59':'#8093a7',edge=code==='HIT'?'#d9ffeb':code==='MISS'?'#ffe0e5':code==='NO DATA'?'#708090':'#d2dbe4';
+    const code=r.hasData?(r.resultCode||'NO HIT'):'NO DATA',s=r.station,color=code==='HIT'?'#4bf0a0':code==='NO HIT'?'#ffd84d':code==='MISS'?'#ff647a':code==='NO DATA'?'#3d4b59':'#8093a7',edge=code==='HIT'?'#d9ffeb':code==='NO HIT'?'#fff2a6':code==='MISS'?'#ffe0e5':code==='NO DATA'?'#708090':'#d2dbe4';
     L.circleMarker([s.lat,s.lon],{radius:8,color:edge,weight:2.4,fillColor:color,fillOpacity:.98})
       .bindTooltip('<b>'+esc(s.displayId)+'</b> · '+esc(verificationValueText(r))+' · <b>'+code+'</b>'+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':''),{sticky:true,className:'county-tip'})
       .bindPopup('<b>'+esc(s.displayId)+' · '+esc(s.name)+'</b><br>'+esc(s.countyName||'')+' · '+esc(s.type||'METAR')+'<div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Duration in criteria</span><strong>'+durationText(r.durationMinutes)+'</strong><span>Result</span><strong>'+code+'</strong></div>')
@@ -915,7 +916,7 @@ function renderEventPointResults(e,results){
     addVerificationMapLabel(r,s.lat,s.lon);
   });
   addVerificationTotals(display);
-  document.getElementById('pointList').innerHTML=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station.displayId)+'</b><small>'+esc(r.station.name)+' · '+esc(r.station.type||'METAR')+' · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.hasData?(r.resultCode||'NO HIT'):'NO DATA')+'</span></div>').join('');
+  document.getElementById('pointList').innerHTML=display.sort((a,b)=>(a.resultCode==='MISS'?-1:a.resultCode==='HIT'?0:1)-(b.resultCode==='MISS'?-1:b.resultCode==='HIT'?0:1)||(a.value??999)-(b.value??999)).map(r=>'<div class="point-row"><div><b>'+esc(r.station.displayId)+'</b><small>'+esc(r.station.name)+' · '+esc(r.station.type||'METAR')+' · '+(r.inHazard?'INSIDE ETN':'OUTSIDE ETN')+(isNum(r.durationMinutes)?' · '+durationText(r.durationMinutes)+' in criteria':'')+'</small></div><strong>'+esc(verificationValueText(r))+'</strong><span class="'+(r.resultCode==='HIT'?'hit':r.resultCode==='NO HIT'?'warn':r.resultCode==='MISS'?'miss':'nodata')+'">'+(r.hasData?(r.resultCode||'NO HIT'):'NO DATA')+'</span></div>').join('');
   renderSelectedEventDetail();
 }
 function showPointError(message){state.verificationLayer.clearLayers();updatePointSourceSummary();document.getElementById('eventCountyCount').textContent='—';document.getElementById('eventHitCount').textContent='—';document.getElementById('pointList').innerHTML='<div class="small">'+esc(message)+'</div>';renderSelectedEventDetail()}
@@ -1059,7 +1060,7 @@ function forecastGuidanceRow(r,g,p,visible){const d=forecastDisplayValues(r,p),t
 function forecastBadgeClass(name){if(String(name).startsWith('Extreme Cold'))return'ecw';if(name==='Cold Weather Advisory')return'cwa';if(String(name).startsWith('Freeze'))return'freeze';if(name==='Frost Advisory')return'frost';return'none'}
 function forecastSortValue(r,p){const d=forecastDisplayValues(r,p);return minFinite(d.t,d.a)??999}
 function formatForecastUpdate(v){const d=new Date(v);if(isNaN(d))return String(v||'—');return new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(d)}
-function addProductLegend(){const ctl=L.control({position:'bottomright'});ctl.onAdd=()=>{const d=L.DomUtil.create('div','legend');d.innerHTML='<h4>Cold-season products</h4>'+Object.keys(PRODUCT_STYLE).slice(0,6).map(n=>'<div class="legend-row"><span class="swatch" style="background:'+PRODUCT_STYLE[n].color+'"></span>'+n+'</div>').join('')+'<div class="legend-note">Selected-event point verification: green = criterion met; red = not met. Points use observations inside the exact VTEC valid window.</div>';return d};ctl.addTo(state.productsMap)}
+function addProductLegend(){const ctl=L.control({position:'bottomright'});ctl.onAdd=()=>{const d=L.DomUtil.create('div','legend');d.innerHTML='<h4>Cold-season products</h4>'+Object.keys(PRODUCT_STYLE).slice(0,6).map(n=>'<div class="legend-row"><span class="swatch" style="background:'+PRODUCT_STYLE[n].color+'"></span>'+n+'</div>').join('')+'<div style="border-top:1px solid #46627f;margin:7px 0 5px"></div><h4 style="margin-top:0">Point verification</h4><div class="legend-row"><span class="swatch" style="background:#4bf0a0"></span>Threshold hit · warning/advisory verified</div><div class="legend-row"><span class="swatch" style="background:#ffd84d"></span>Threshold not hit · warning/advisory in effect</div><div class="legend-row"><span class="swatch" style="background:#ff647a"></span>Threshold hit · no warning/advisory in effect</div><div class="legend-note">Applies to METAR, COOP, RWIS, USCRN, DCP, and CWOP/APRS verification points.</div>';return d};ctl.addTo(state.productsMap)}
 function showWarnings(w){['warningBox1','warningBox2'].forEach(id=>{const el=document.getElementById(id);if(w.length){el.innerHTML='<b>Data notes:</b><br>'+w.map(esc).join('<br>');el.classList.add('show')}else{el.classList.remove('show');el.innerHTML=''}})}
 function setStatus(which,msg,error,hide){const el=document.getElementById(which==='products'?'status2':'status1');el.textContent=msg;el.classList.toggle('error',!!error);el.classList.add('show');if(hide)setTimeout(()=>el.classList.remove('show'),hide)}
 function minFinite(a,b){if(isNum(a)&&isNum(b))return Math.min(a,b);return isNum(a)?a:isNum(b)?b:null}function minArray(a){const v=(a||[]).filter(isNum);return v.length?Math.min(...v):null}function isNum(v){return typeof v==='number'&&Number.isFinite(v)}function fmt(v){return isNum(v)?v.toFixed(1):'—'}function err(e){return e&&e.message?e.message:String(e||'Unknown error')}function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
