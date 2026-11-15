@@ -12,6 +12,7 @@ import html
 import json
 import math
 import re
+import ssl
 import time
 import urllib.parse
 import urllib.request
@@ -30,6 +31,7 @@ SEED_STATIONS = {
 
 WX_CALL_RE = re.compile(r"(?:call=|>)([A-Z0-9]{1,8}(?:-[0-9]{1,2})?)(?:[&<])", re.I)
 TS_RE = re.compile(r"\b(20\d{12})\b")
+TS_ALT_RE = re.compile(r"\b(20\d{2})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?\b")
 TEMP_RE = re.compile(r"t(-?\d{3})(?!\d)", re.I)
 HUM_RE = re.compile(r"h(\d{2})(?!\d)", re.I)
 WIND_RE = re.compile(r"s(\d{3})(?!\d)", re.I)
@@ -37,7 +39,12 @@ POS_DEC_RE = re.compile(r"(-?\d{1,3}\.\d+)")
 
 def get(url: str, timeout: int = 45) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    # findU currently presents a certificate chain that GitHub Actions'
+    # Python trust store rejects.  These calls are public/read-only weather
+    # retrievals with no credentials, so use an unverified TLS context only
+    # for this fallback host.
+    ctx = ssl._create_unverified_context()
+    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
         return r.read().decode("utf-8", "replace")
 
 def c_to_f(c):
@@ -105,6 +112,26 @@ def station_position(call):
             return lat, lon
     return None
 
+def parse_timestamp(line: str):
+    m = TS_RE.search(line)
+    if m:
+        try:
+            return datetime.strptime(m.group(1), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        except Exception:
+            pass
+    m = TS_ALT_RE.search(line)
+    if m:
+        try:
+            sec = m.group(6) or "00"
+            return datetime(
+                int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                int(m.group(4)), int(m.group(5)), int(sec), tzinfo=timezone.utc
+            )
+        except Exception:
+            pass
+    return None
+
+
 def parse_packet_weather(packet):
     tm = TEMP_RE.search(packet)
     if not tm:
@@ -135,17 +162,13 @@ def station_history(call, lat, lon):
     out = []
     for raw_line in re.split(r"[\r\n]+|<br\s*/?>", txt, flags=re.I):
         line = html.unescape(re.sub(r"<[^>]+>", " ", raw_line))
-        ts = TS_RE.search(line)
-        if not ts:
+        dt = parse_timestamp(line)
+        if not dt:
             continue
         wx = parse_packet_weather(line)
         if not wx:
             continue
         temp_f, rh, wind_mph = wx
-        try:
-            dt = datetime.strptime(ts.group(1), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-        except Exception:
-            continue
         dew_f = dewpoint_f(temp_f, rh)
         out.append({
             "id": call,
@@ -200,6 +223,7 @@ def main():
             "stationsWithHistory": len(unique_st),
             "observations": len(obs),
             "errors": errors[-20:],
+            "seedGW1930Requested": "GW1930" in calls,
         },
         "stations": sorted(unique_st.values(), key=lambda s: s["id"]),
         "observations": obs,
