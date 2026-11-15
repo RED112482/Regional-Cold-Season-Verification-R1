@@ -17,6 +17,7 @@ from pathlib import Path
 
 API = "https://api.synopticdata.com/v2"
 OUT = Path("site/data/cwop_recent.json")
+OUT_DIR = Path("site/data/cwop")
 HAZARDS = Path("site/data/hazards/2026.kml")
 TOKEN = os.environ.get("SYNOPTIC_TOKEN", "").strip()
 CWAS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
@@ -271,6 +272,35 @@ def main():
         "observations": observations,
     }
     write_atomic(payload)
+
+    # Publish small per-CWA caches so the browser never has to download the
+    # full regional history file.  The regional file remains for diagnostics.
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for cwa in CWAS:
+        cwa_obs = [r for r in observations if r.get("cwa") == cwa]
+        cwa_ids = {r["id"] for r in cwa_obs}
+        cwa_stations = [stations[x] for x in sorted(cwa_ids) if x in stations]
+        cwa_payload = {
+            "generatedUtc": payload["generatedUtc"],
+            "source": payload["source"],
+            "cwa": cwa,
+            "windowDays": WINDOW_DAYS,
+            "eventWindows": payload["eventWindows"],
+            "status": {
+                "network": NETWORK,
+                "stationsWithHistory": len(cwa_ids),
+                "observations": len(cwa_obs),
+            },
+            "stations": cwa_stations,
+            "observations": cwa_obs,
+        }
+        out = OUT_DIR / f"{cwa}.json"
+        tmp = out.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(cwa_payload, separators=(",", ":")), encoding="utf-8")
+        json.loads(tmp.read_text(encoding="utf-8"))
+        tmp.replace(out)
+        print(cwa, "cache", len(cwa_ids), "stations", len(cwa_obs), "observations", out.stat().st_size, "bytes")
+
     print(json.dumps(payload["status"], indent=2))
     # Helpful targeted check for the Chatom station discussed during development.
     for candidate in ("G1930", "GW1930"):
