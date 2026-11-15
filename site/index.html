@@ -334,7 +334,7 @@
 <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
-const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:null,primaryMetarSkySamples:[],verifyCwa:'MOB',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
+const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
 const PRODUCT_STYLE={
  'Frost Advisory':{color:'#6495ed'},'Freeze Watch':{color:'#00ffff'},'Freeze Warning':{color:'#483d8b'},'Cold Weather Advisory':{color:'#afeeee'},'Extreme Cold Watch':{color:'#5f9ea0'},'Extreme Cold Warning':{color:'#0000ff'},'Legacy Wind Chill':{color:'#8a6cff'},'Legacy Hard Freeze':{color:'#5540a5'}
 };
@@ -706,14 +706,23 @@ async function liveAviationSitesForCwa(wfo){
   }
   return out;
 }
-async function ensureCwopData(){
-  if(state.cwopData)return state.cwopData;
+async function ensureCwopData(wfo){
+  const key=String(wfo||'').toUpperCase();
+  if(state.cwopData instanceof Map && state.cwopData.has(key))return state.cwopData.get(key);
   try{
-    const r=await fetch('./data/cwop_recent.json',{cache:'no-store'});
-    if(!r.ok)throw new Error('CWOP cache HTTP '+r.status);
-    state.cwopData=await r.json();
-  }catch(e){console.warn('CWOP cache unavailable',e);state.cwopData={observations:[],stations:[]}}
-  return state.cwopData;
+    const r=await fetch('./data/cwop/'+encodeURIComponent(key)+'.json',{cache:'no-store'});
+    if(!r.ok)throw new Error('CWOP '+key+' cache HTTP '+r.status);
+    const d=await r.json();
+    if(!(state.cwopData instanceof Map))state.cwopData=new Map();
+    state.cwopData.set(key,d);
+    return d;
+  }catch(e){
+    console.warn('CWOP '+key+' cache unavailable',e);
+    const empty={observations:[],stations:[],status:{error:String(e)}};
+    if(!(state.cwopData instanceof Map))state.cwopData=new Map();
+    state.cwopData.set(key,empty);
+    return empty;
+  }
 }
 function milesBetween(lat1,lon1,lat2,lon2){
   const rad=Math.PI/180,dlat=(lat2-lat1)*rad,dlon=(lon2-lon1)*rad,a=Math.sin(dlat/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dlon/2)**2;
@@ -739,7 +748,7 @@ function nearestMetarSky(lat,lon,time){
   return best;
 }
 async function loadCwopSupplement(e,start,finish){
-  const data=await ensureCwopData(),stations=new Map((data.stations||[]).map(x=>[String(x.id),x])),groups=new Map();
+  const data=await ensureCwopData(e.wfo),stations=new Map((data.stations||[]).map(x=>[String(x.id),x])),groups=new Map();
   for(const o of (data.observations||[])){
     const t=new Date(o.time);if(isNaN(t)||t<start||t>finish)continue;
     const st=stations.get(String(o.id))||o;
@@ -747,6 +756,7 @@ async function loadCwopSupplement(e,start,finish){
     if(!groups.has(o.id))groups.set(o.id,{site:{id:o.id,name:o.id,lat:Number(st.lat),lon:Number(st.lon)},rows:[]});
     groups.get(o.id).rows.push(o);
   }
+  if(!groups.size){document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small">Synoptic CWOP/APRS: no observations found in this ETN window for '+esc(e.wfo)+'.</div>')}
   const scored=[];
   for(const g of groups.values()){
     const county=findCountyForPoint(g.site.lon,g.site.lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e);
