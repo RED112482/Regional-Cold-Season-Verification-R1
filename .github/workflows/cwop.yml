@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Build Synoptic CWOP history cache (public token test)
+      - name: Build Synoptic CWOP history cache (per-CWA publish)
         env:
           SYNOPTIC_TOKEN: ${{ secrets.SYNOPTIC_TOKEN }}
         run: python scripts/build_cwop.py
