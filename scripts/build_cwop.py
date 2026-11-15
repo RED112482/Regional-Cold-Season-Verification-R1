@@ -65,8 +65,12 @@ def discover():
                 "cwa": cwa,
                 "network": NETWORK,
                 "status": "active",
-                "fields": "stid,name,latitude,longitude,mnet_id",
             })
+            summary = d.get("SUMMARY") or {}
+            code = str(summary.get("RESPONSE_CODE", ""))
+            if code != "1":
+                errors.append(f"{cwa} metadata API: {summary}")
+                continue
             for s in d.get("STATION", []) or []:
                 stid = str(s.get("STID") or "").strip()
                 if not stid:
@@ -103,6 +107,11 @@ def main():
     end_s = now.strftime("%Y%m%d%H%M")
 
     stations, errors = discover()
+    print("Synoptic metadata stations discovered:", len(stations))
+    if errors:
+        print("Synoptic metadata/errors:")
+        for e in errors:
+            print(" -", e)
     obs_out = []
     batches = 0
     batches_ok = 0
@@ -122,7 +131,7 @@ def main():
                 "showemptyvars": "1",
             })
             summary = d.get("SUMMARY") or {}
-            if str(summary.get("RESPONSE_CODE", "1")) not in ("1", "200"):
+            if str(summary.get("RESPONSE_CODE", "")) != "1":
                 errors.append(f"batch {batches}: {summary}")
                 continue
 
