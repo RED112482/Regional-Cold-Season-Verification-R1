@@ -1,319 +1,211 @@
 #!/usr/bin/env python3
-"""Build a compact recent CWOP/APRS observation cache from NOAA MADIS.
+"""Build a compact CWOP/APRS history cache using station-targeted findU queries.
 
-MADIS public mesonet netCDF files contain many providers.  This extractor keeps
-CWOP/APRS-like stations within the regional cold-season domain and writes a
-small JSON cache for browser-side ETN verification.
+This is the lightweight fallback for ETN verification.  It discovers nearby
+weather stations around the counties in the regional CWA domain, gets each
+station position, then requests recent timestamped APRS packets only for those
+stations.  Output schema matches the viewer's CWOP cache.
 """
 from __future__ import annotations
 
-import gzip
-import io
+import html
 import json
 import math
-import os
 import re
-import tempfile
+import time
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import netCDF4
-import numpy as np
-
-BASE = "https://madis-data.ncep.noaa.gov/madisPublic/data/LDAD/mesonet/netCDF"
+COUNTIES = Path("site/data/counties.geojson")
 OUT = Path("site/data/cwop_recent.json")
+BASE = "https://www.findu.com/cgi-bin"
 USER_AGENT = "Regional-Cold-Season-Viewer/R14-ETN-VERIFY"
-# Broad box encompassing MOB/LIX/JAN/BMX/TAE with a little margin.
-LAT_MIN, LAT_MAX = 27.5, 35.8
-LON_MIN, LON_MAX = -92.5, -82.0
-CWOP_ID = re.compile(r"^(?:[CDFEG]W\d{3,5}|[A-Z]{1,2}\d[A-Z0-9]{1,5}|K[A-Z]{2,5}\d{1,3})$", re.I)
+HISTORY_HOURS = 168
+MAX_STATIONS = 100
+SEED_STATIONS = {
+    "GW1930": (31.4510, -88.1962),  # Chatom / Washington County, AL
+}
 
+WX_CALL_RE = re.compile(r"(?:call=|>)([A-Z0-9]{1,8}(?:-[0-9]{1,2})?)(?:[&<])", re.I)
+TS_RE = re.compile(r"\b(20\d{12})\b")
+TEMP_RE = re.compile(r"t(-?\d{3})(?!\d)", re.I)
+HUM_RE = re.compile(r"h(\d{2})(?!\d)", re.I)
+WIND_RE = re.compile(r"s(\d{3})(?!\d)", re.I)
+POS_DEC_RE = re.compile(r"(-?\d{1,3}\.\d+)")
 
-def pick(ds, *names):
-    low = {k.lower(): k for k in ds.variables}
-    for name in names:
-        if name.lower() in low:
-            return ds.variables[low[name.lower()]]
-    return None
+def get(url: str, timeout: int = 45) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
 
+def c_to_f(c):
+    return c * 9.0 / 5.0 + 32.0
 
-def decode_strings(var):
-    if var is None:
+def dewpoint_f(temp_f, rh):
+    if temp_f is None or rh is None or rh <= 0:
         return None
-    a = var[:]
-    try:
-        if getattr(a, "dtype", None) is not None and a.dtype.kind in ("S", "U") and a.ndim > 1:
-            a = netCDF4.chartostring(a)
-    except Exception:
-        pass
+    # Magnus formula.
+    tc = (temp_f - 32.0) * 5.0 / 9.0
+    rh = min(100.0, max(1.0, rh))
+    a, b = 17.625, 243.04
+    g = math.log(rh / 100.0) + a * tc / (b + tc)
+    dc = b * g / (a - g)
+    return c_to_f(dc)
+
+def county_centers():
+    d = json.loads(COUNTIES.read_text())
     out = []
-    for x in np.asarray(a).reshape(-1):
-        if isinstance(x, bytes):
-            x = x.decode("utf-8", "ignore")
-        out.append(str(x).strip().strip("\x00"))
+    for f in d.get("features", []):
+        p = f.get("properties") or {}
+        try:
+            lat = float(p.get("lat"))
+            lon = float(p.get("lon"))
+        except Exception:
+            continue
+        out.append((lat, lon))
     return out
 
-
-def numeric(var):
-    if var is None:
-        return None
-    a = np.asarray(var[:], dtype=float).reshape(-1)
-    fill = getattr(var, "_FillValue", None)
-    if fill is not None:
-        a[np.isclose(a, float(fill), equal_nan=False)] = np.nan
-    return a
-
-
-def to_f(values, var):
-    if values is None:
-        return None
-    units = str(getattr(var, "units", "")).lower()
-    a = values.astype(float)
-    if "kelvin" in units or units.strip() in {"k", "degk"}:
-        return (a - 273.15) * 9 / 5 + 32
-    if "celsius" in units or "degc" in units or units.strip() in {"c", "degree_c"}:
-        return a * 9 / 5 + 32
-    return a
-
-
-def wind_to_kt(values, var):
-    if values is None:
-        return None
-    units = str(getattr(var, "units", "")).lower()
-    a = values.astype(float)
-    if "m/s" in units or "meter" in units:
-        return a * 1.94384449
-    if "mph" in units:
-        return a * 0.868976
-    return a
-
-
-def epoch_to_iso(v):
-    if not math.isfinite(float(v)):
-        return None
-    # MADIS observationTime is normally Unix seconds.
-    try:
-        return datetime.fromtimestamp(float(v), tz=timezone.utc).isoformat().replace("+00:00", "Z")
-    except Exception:
-        return None
-
-
-def looks_cwop(station, provider):
-    p = (provider or "").upper()
-    s = (station or "").upper()
-    if "APRS" in p or "CWOP" in p:
-        return True
-    return bool(CWOP_ID.match(s))
-
-
-def file_url(dt):
-    return f"{BASE}/{dt:%Y%m%d_%H00}.gz"
-
-
-def fetch_hour(dt):
-    req = urllib.request.Request(file_url(dt), headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=90) as r:
-        raw = r.read()
-    return gzip.decompress(raw)
-
-
-def parse_hour(blob):
-    fd, path = tempfile.mkstemp(suffix=".nc")
-    os.close(fd)
-    try:
-        Path(path).write_bytes(blob)
-        ds = netCDF4.Dataset(path)
+def discover_calls():
+    calls = set(SEED_STATIONS)
+    # Use every county center, but stop once the regional cap is reached.
+    for lat, lon in county_centers():
+        if len(calls) >= MAX_STATIONS:
+            break
+        q = urllib.parse.urlencode({"lat": f"{lat:.4f}", "lon": f"{lon:.4f}", "limit": 20, "noold": 0})
         try:
-            sidv = pick(ds, "stationId", "station_id", "stationName", "id")
-            provv = pick(ds, "providerId", "provider_id", "provider", "networkId", "network_id")
-            latv = pick(ds, "latitude", "lat")
-            lonv = pick(ds, "longitude", "lon")
-            tv = pick(ds, "temperature", "airTemperature", "temp")
-            tdv = pick(ds, "dewpoint", "dewPoint", "dewpointTemperature")
-            wv = pick(ds, "windSpeed", "wind_speed")
-            otv = pick(ds, "observationTime", "observation_time", "timeObs", "time")
-            if sidv is None or latv is None or lonv is None or tv is None or otv is None:
-                return []
-            sid = decode_strings(sidv)
-            prov = decode_strings(provv) if provv is not None else [""] * len(sid)
-            lat = numeric(latv); lon = numeric(lonv); temp = to_f(numeric(tv), tv)
-            dew = to_f(numeric(tdv), tdv) if tdv is not None else None
-            wind = wind_to_kt(numeric(wv), wv) if wv is not None else None
-            obs = numeric(otv)
-            n = min(len(sid), len(lat), len(lon), len(temp), len(obs))
-            out = []
-            for i in range(n):
-                if not (math.isfinite(lat[i]) and math.isfinite(lon[i]) and math.isfinite(temp[i])):
-                    continue
-                if not (LAT_MIN <= lat[i] <= LAT_MAX and LON_MIN <= lon[i] <= LON_MAX):
-                    continue
-                provider = prov[i] if i < len(prov) else ""
-                if not looks_cwop(sid[i], provider):
-                    continue
-                rec = {
-                    "id": sid[i],
-                    "provider": provider or "CWOP/APRS",
-                    "lat": round(float(lat[i]), 5),
-                    "lon": round(float(lon[i]), 5),
-                    "time": epoch_to_iso(obs[i]),
-                    "tempF": round(float(temp[i]), 2),
-                    "dewF": round(float(dew[i]), 2) if dew is not None and i < len(dew) and math.isfinite(dew[i]) else None,
-                    "windKt": round(float(wind[i]), 2) if wind is not None and i < len(wind) and math.isfinite(wind[i]) else None,
-                }
-                if rec["time"]:
-                    out.append(rec)
-            return out
-        finally:
-            ds.close()
-    finally:
-        try: os.unlink(path)
-        except OSError: pass
-
-
-def load_existing():
-    if not OUT.exists():
-        return []
-    try:
-        return json.loads(OUT.read_text()).get("observations", [])
-    except Exception:
-        return []
-
-
-def current_season_year(now: datetime) -> int:
-    return now.year if now.month >= 6 else now.year - 1
-
-
-def recent_etn_hours(now: datetime, lookback_days: int = 7):
-    """UTC hours intersecting recent cold-product ETN windows."""
-    kml = Path(f"site/data/hazards/{current_season_year(now)}.kml")
-    if not kml.exists():
-        return []
-    text = kml.read_text(encoding="utf-8", errors="ignore")
-    pat = re.compile(
-        r"<Placemark>.*?<name>([^<]+)</name>.*?"
-        r"<TimeSpan>\s*<begin>([^<]+)</begin>\s*<end>([^<]+)</end>\s*</TimeSpan>",
-        re.I | re.S,
-    )
-    cutoff = now - timedelta(days=lookback_days)
-    hours = set()
-    for name, begin_s, end_s in pat.findall(text):
-        upper = name.upper()
-        if not any(x in upper for x in (
-            "FROST", "FREEZE", "COLD", "WIND CHILL", "HARD FREEZE",
-            ".FR.", ".FZ.", ".CW.", ".EC.", ".WC.", ".HZ.",
-        )):
+            txt = get(f"{BASE}/wxnear.cgi?{q}")
+        except Exception as exc:
+            print("discover warning", lat, lon, exc)
             continue
+        for call in WX_CALL_RE.findall(txt):
+            call = html.unescape(call).upper()
+            if 2 <= len(call) <= 10:
+                calls.add(call)
+            if len(calls) >= MAX_STATIONS:
+                break
+        time.sleep(0.12)
+    return sorted(calls)
+
+def station_position(call):
+    if call in SEED_STATIONS:
+        return SEED_STATIONS[call]
+    q = urllib.parse.urlencode({"call": call, "start": 24, "length": 24, "comma": 1})
+    try:
+        txt = get(f"{BASE}/posit.cgi?{q}")
+    except Exception:
+        return None
+    # findU comma output contains decimal lat/lon.  Choose the first plausible
+    # pair in the regional domain.
+    nums = [float(x) for x in POS_DEC_RE.findall(txt)]
+    for i in range(len(nums) - 1):
+        lat, lon = nums[i], nums[i + 1]
+        if 27.0 <= lat <= 36.5 and -93.5 <= lon <= -81.0:
+            return lat, lon
+    return None
+
+def parse_packet_weather(packet):
+    tm = TEMP_RE.search(packet)
+    if not tm:
+        return None
+    try:
+        temp = float(int(tm.group(1)))
+    except Exception:
+        return None
+    hm = HUM_RE.search(packet)
+    rh = None
+    if hm:
+        h = int(hm.group(1))
+        rh = 100.0 if h == 0 else float(h)
+    wm = WIND_RE.search(packet)
+    wind_mph = float(int(wm.group(1))) if wm else None
+    return temp, rh, wind_mph
+
+def station_history(call, lat, lon):
+    # raw.cgi guarantees timestamp prefix when time=1.  We then keep only
+    # packets that contain APRS weather temperature fields.
+    q = urllib.parse.urlencode({
+        "call": call,
+        "start": HISTORY_HOURS,
+        "length": HISTORY_HOURS,
+        "time": 1,
+    })
+    txt = get(f"{BASE}/raw.cgi?{q}", timeout=60)
+    out = []
+    for raw_line in re.split(r"[\r\n]+|<br\s*/?>", txt, flags=re.I):
+        line = html.unescape(re.sub(r"<[^>]+>", " ", raw_line))
+        ts = TS_RE.search(line)
+        if not ts:
+            continue
+        wx = parse_packet_weather(line)
+        if not wx:
+            continue
+        temp_f, rh, wind_mph = wx
         try:
-            begin = datetime.fromisoformat(begin_s.replace("Z", "+00:00"))
-            end = datetime.fromisoformat(end_s.replace("Z", "+00:00"))
+            dt = datetime.strptime(ts.group(1), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
         except Exception:
             continue
-        if end < cutoff or begin > now:
-            continue
-        cur = max(begin, cutoff).replace(minute=0, second=0, microsecond=0)
-        stop = min(end, now)
-        while cur <= stop:
-            hours.add(cur)
-            cur += timedelta(hours=1)
-    return sorted(hours)
+        dew_f = dewpoint_f(temp_f, rh)
+        out.append({
+            "id": call,
+            "provider": "findU CWOP/APRS",
+            "lat": round(lat, 5),
+            "lon": round(lon, 5),
+            "time": dt.isoformat().replace("+00:00", "Z"),
+            "tempF": round(temp_f, 2),
+            "dewF": round(dew_f, 2) if dew_f is not None else None,
+            "windKt": round(wind_mph * 0.868976, 2) if wind_mph is not None else None,
+        })
+    return out
 
-
-def write_json_atomic(path: Path, payload: dict):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+def write_atomic(payload):
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    tmp = OUT.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     json.loads(tmp.read_text(encoding="utf-8"))
-    tmp.replace(path)
-
+    tmp.replace(OUT)
 
 def main():
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    existing = load_existing()
-    records = list(existing)
-    attempted = succeeded = decoded_obs = 0
+    calls = discover_calls()
+    obs = []
+    stations = []
     errors = []
-
-    targets = set(recent_etn_hours(now, lookback_days=7))
-
-    # Always refresh the latest four completed hours.
-    for h in range(4, 0, -1):
-        targets.add(now - timedelta(hours=h))
-
-    # Fallback when no hazard KML is available.
-    if not targets:
-        for h in range(30, 0, -1):
-            targets.add(now - timedelta(hours=h))
-
-    # Avoid re-downloading historical hours already represented, while still
-    # refreshing recent hours for late/recovered MADIS observations.
-    existing_hours = set()
-    for r in existing:
+    for n, call in enumerate(calls, 1):
+        pos = station_position(call)
+        if not pos:
+            errors.append(f"{call}: no regional position")
+            continue
+        lat, lon = pos
         try:
-            t = datetime.fromisoformat(r["time"].replace("Z", "+00:00"))
-            existing_hours.add(t.replace(minute=0, second=0, microsecond=0))
-        except Exception:
-            pass
-
-    refresh_cutoff = now - timedelta(hours=8)
-    targets = sorted(t for t in targets if t >= refresh_cutoff or t not in existing_hours)
-    print("MADIS target hours:", len(targets))
-
-    for dt in targets:
-        attempted += 1
-        try:
-            parsed = parse_hour(fetch_hour(dt))
-            records.extend(parsed)
-            succeeded += 1
-            decoded_obs += len(parsed)
-            print("decoded", dt.isoformat(), "cwop_obs", len(parsed))
+            rows = station_history(call, lat, lon)
+            if rows:
+                obs.extend(rows)
+                stations.append({"id": call, "provider": "findU CWOP/APRS", "lat": lat, "lon": lon})
+                print(call, "obs", len(rows))
         except Exception as exc:
-            msg = f"{dt.isoformat()} {type(exc).__name__}: {exc}"
-            errors.append(msg)
-            print("warning", msg)
+            errors.append(f"{call}: {type(exc).__name__}: {exc}")
+        time.sleep(0.18)
 
-    cutoff = now - timedelta(days=14)
-    dedup = {}
-    for r in records:
-        try:
-            t = datetime.fromisoformat(r["time"].replace("Z", "+00:00"))
-        except Exception:
-            continue
-        if t < cutoff:
-            continue
-        key = (r.get("id"), r.get("time"))
-        dedup[key] = r
-
-    obs = sorted(dedup.values(), key=lambda x: (x["time"], x["id"]))
-    stations = {}
-    for r in obs:
-        stations[r["id"]] = {
-            "id": r["id"],
-            "provider": r.get("provider"),
-            "lat": r["lat"],
-            "lon": r["lon"],
-        }
-
+    # Dedupe by station/time.
+    dedup = {(r["id"], r["time"]): r for r in obs}
+    obs = sorted(dedup.values(), key=lambda r: (r["time"], r["id"]))
+    unique_st = {s["id"]: s for s in stations}
     payload = {
         "generatedUtc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "source": "NOAA MADIS public mesonet / CWOP-APRS",
-        "windowDays": 14,
+        "source": "findU station-targeted CWOP/APRS history fallback",
+        "windowDays": HISTORY_HOURS / 24,
         "status": {
-            "attemptedHours": attempted,
-            "successfulHours": succeeded,
-            "decodedThisRun": decoded_obs,
-            "historicalTargetHours": len(targets),
-            "errors": errors[-12:],
+            "discoveredStations": len(calls),
+            "stationsWithHistory": len(unique_st),
+            "observations": len(obs),
+            "errors": errors[-20:],
         },
-        "stations": sorted(stations.values(), key=lambda x: x["id"]),
+        "stations": sorted(unique_st.values(), key=lambda s: s["id"]),
         "observations": obs,
     }
-
-    write_json_atomic(OUT, payload)
-    print("stations", len(stations), "observations", len(obs))
-
-
-
+    write_atomic(payload)
+    print("stations", len(unique_st), "observations", len(obs), "GW1930", "GW1930" in unique_st)
 
 if __name__ == "__main__":
     main()
