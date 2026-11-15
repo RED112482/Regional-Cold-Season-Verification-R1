@@ -27,10 +27,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Probe MADIS guest surface dump
-        run: python scripts/probe_madis_guest.py
-
-      - name: Build station-targeted CWOP history cache (aprs.fi fallback)
+      - name: Build Synoptic CWOP history cache
+        env:
+          SYNOPTIC_TOKEN: ${{ secrets.SYNOPTIC_TOKEN }}
         run: python scripts/build_cwop.py
       - name: Validate CWOP JSON
         shell: bash
@@ -43,6 +42,7 @@ jobs:
           d=json.loads(p.read_text())
           assert isinstance(d.get("stations"), list)
           assert isinstance(d.get("observations"), list)
+          assert (d.get("status") or {}).get("batchesSuccessful", 0) > 0
           print("CWOP stations:", len(d["stations"]))
           print("CWOP observations:", len(d["observations"]))
           print("Status:", d.get("status"))
@@ -54,21 +54,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cp site/data/cwop_recent.json /tmp/cwop_recent.json
-          cp site/data/madis_guest_form.json /tmp/madis_guest_form.json
-          if [ -f site/data/cwop_aprsfi_diagnostic.html ]; then
-            cp site/data/cwop_aprsfi_diagnostic.html /tmp/cwop_aprsfi_diagnostic.html
-          fi
           git fetch origin main
           git reset --hard origin/main
           mkdir -p site/data
           cp /tmp/cwop_recent.json site/data/cwop_recent.json
-          cp /tmp/madis_guest_form.json site/data/madis_guest_form.json
-          if [ -f /tmp/cwop_aprsfi_diagnostic.html ]; then
-            cp /tmp/cwop_aprsfi_diagnostic.html site/data/cwop_aprsfi_diagnostic.html
-          else
-            rm -f site/data/cwop_aprsfi_diagnostic.html
-          fi
-          git add site/data/cwop_recent.json site/data/cwop_aprsfi_diagnostic.html site/data/madis_guest_form.json || true
+          git add site/data/cwop_recent.json
           if git diff --cached --quiet; then
             echo "CWOP data unchanged."
           else
