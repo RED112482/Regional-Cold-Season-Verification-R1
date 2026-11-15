@@ -111,21 +111,40 @@ def in_windows(dt: datetime, windows):
 
 
 def discover():
+    """Discover active CWOP/APRS stations using the verified Synoptic latest endpoint.
+
+    The latest endpoint is intentionally used instead of stations/metadata because it
+    works with the public Synoptic token used by GitHub Actions and returns the same
+    station metadata plus a current observation payload.  MNET_ID is returned as a
+    string (for example "65"), so normalize before validating the network.
+    """
     stations = {}
     errors = []
     for cwa in CWAS:
         try:
-            d = get_json("stations/metadata", {
+            d = get_json("stations/latest", {
                 "cwa": cwa,
                 "network": NETWORK,
                 "status": "active",
+                "units": "english,speed|kts",
+                "obtimezone": "UTC",
+                "qc": "off",
             })
             summary = d.get("SUMMARY") or {}
             code = str(summary.get("RESPONSE_CODE", ""))
             if code != "1":
-                errors.append(f"{cwa} metadata API: {summary}")
+                errors.append(f"{cwa} latest API: {summary}")
                 continue
-            for s in d.get("STATION", []) or []:
+
+            rows = d.get("STATION", []) or []
+            print(f"{cwa} latest stations returned:", len(rows))
+
+            for s in rows:
+                # Synoptic returns MNET_ID as a string in /stations/latest.
+                mnet = str(s.get("MNET_ID") or "").strip()
+                if mnet and mnet != NETWORK:
+                    continue
+
                 stid = str(s.get("STID") or "").strip()
                 if not stid:
                     continue
@@ -133,6 +152,7 @@ def discover():
                 lon = num(s.get("LONGITUDE"))
                 if lat is None or lon is None:
                     continue
+
                 stations[stid] = {
                     "id": stid,
                     "name": s.get("NAME") or stid,
@@ -141,8 +161,24 @@ def discover():
                     "lon": lon,
                     "cwa": cwa,
                 }
+
+                if stid == "G1930":
+                    obs = s.get("OBSERVATIONS") or {}
+                    temp = None
+                    temp_time = None
+                    for key, value in obs.items():
+                        if key.startswith("air_temp_value_") and isinstance(value, dict):
+                            temp = num(value.get("value"))
+                            temp_time = value.get("date_time")
+                            break
+                    print(
+                        "FOUND G1930 in discovery:",
+                        "MNET_ID=", mnet,
+                        "tempF=", temp,
+                        "time=", temp_time,
+                    )
         except Exception as exc:
-            errors.append(f"{cwa} metadata: {type(exc).__name__}: {exc}")
+            errors.append(f"{cwa} latest: {type(exc).__name__}: {exc}")
     return stations, errors
 
 
@@ -171,9 +207,9 @@ def main():
         print(" -", a.isoformat(), "to", b.isoformat())
 
     stations, errors = discover()
-    print("Synoptic metadata stations discovered:", len(stations))
+    print("Synoptic CWOP stations discovered:", len(stations))
     if errors:
-        print("Synoptic metadata/errors:")
+        print("Synoptic discovery/errors:")
         for e in errors:
             print(" -", e)
     obs_out = []
@@ -305,7 +341,11 @@ def main():
     # Helpful targeted check for the Chatom station discussed during development.
     for candidate in ("G1930", "GW1930"):
         if candidate in stations:
-            print(candidate, "found", sum(1 for r in observations if r["id"] == candidate), "observations")
+            count = sum(1 for r in observations if r["id"] == candidate)
+            print(candidate, "found", count, "historical observations")
+            if count:
+                latest = max((r for r in observations if r["id"] == candidate), key=lambda r: r["time"])
+                print(candidate, "latest retained observation:", latest["time"], latest["tempF"], "F")
 
 
 if __name__ == "__main__":
