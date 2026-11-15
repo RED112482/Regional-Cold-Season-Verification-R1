@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: "cwop-observations"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   cwop:
@@ -31,6 +31,22 @@ jobs:
         run: pip install numpy netCDF4
       - name: Build compact CWOP cache (R14)
         run: python scripts/build_cwop.py
+      - name: Validate CWOP JSON
+        shell: bash
+        run: |
+          test -s site/data/cwop_recent.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("site/data/cwop_recent.json")
+          d=json.loads(p.read_text())
+          assert isinstance(d.get("stations"), list)
+          assert isinstance(d.get("observations"), list)
+          print("CWOP stations:", len(d["stations"]))
+          print("CWOP observations:", len(d["observations"]))
+          print("Status:", d.get("status"))
+          PY
+
       - name: Save CWOP JSON
         shell: bash
         run: |
