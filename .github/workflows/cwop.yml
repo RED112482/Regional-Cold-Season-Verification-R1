@@ -1,0 +1,50 @@
+name: Refresh CWOP APRS verification observations
+
+on:
+  schedule:
+    - cron: "12 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_cwop.py"
+      - ".github/workflows/cwop.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "cwop-observations"
+  cancel-in-progress: true
+
+jobs:
+  cwop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install MADIS reader
+        run: pip install numpy netCDF4
+      - name: Build compact CWOP cache
+        run: python scripts/build_cwop.py
+      - name: Save CWOP JSON
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp site/data/cwop_recent.json /tmp/cwop_recent.json
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p site/data
+          cp /tmp/cwop_recent.json site/data/cwop_recent.json
+          git add site/data/cwop_recent.json
+          if git diff --cached --quiet; then
+            echo "CWOP data unchanged."
+          else
+            git commit -m "Refresh CWOP APRS verification observations"
+            git push origin HEAD:main
+          fi
