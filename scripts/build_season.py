@@ -24,7 +24,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 APP_TITLE = "NWS Cold Season Verification and Forecast Tool"
-BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R13-NBM-VERIFY-HOTFIX"
+BUILD_ID = "REGIONAL-COLD-SEASON-GITHUB-R14-ETN-VERIFY"
 DATA_MODE = "COLD_SEASON_COUNTY_VERIFICATION"
 LOCAL_TZ = ZoneInfo("America/Chicago")
 IEM_BASE = "https://mesonet.agron.iastate.edu"
