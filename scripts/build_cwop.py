@@ -180,19 +180,98 @@ def load_existing():
         return []
 
 
+def current_season_year(now: datetime) -> int:
+    return now.year if now.month >= 6 else now.year - 1
+
+
+def recent_etn_hours(now: datetime, lookback_days: int = 7):
+    """UTC hours intersecting recent cold-product ETN windows."""
+    kml = Path(f"site/data/hazards/{current_season_year(now)}.kml")
+    if not kml.exists():
+        return []
+    text = kml.read_text(encoding="utf-8", errors="ignore")
+    pat = re.compile(
+        r"<Placemark>.*?<name>([^<]+)</name>.*?"
+        r"<TimeSpan>\s*<begin>([^<]+)</begin>\s*<end>([^<]+)</end>\s*</TimeSpan>",
+        re.I | re.S,
+    )
+    cutoff = now - timedelta(days=lookback_days)
+    hours = set()
+    for name, begin_s, end_s in pat.findall(text):
+        upper = name.upper()
+        if not any(x in upper for x in (
+            "FROST", "FREEZE", "COLD", "WIND CHILL", "HARD FREEZE",
+            ".FR.", ".FZ.", ".CW.", ".EC.", ".WC.", ".HZ.",
+        )):
+            continue
+        try:
+            begin = datetime.fromisoformat(begin_s.replace("Z", "+00:00"))
+            end = datetime.fromisoformat(end_s.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if end < cutoff or begin > now:
+            continue
+        cur = max(begin, cutoff).replace(minute=0, second=0, microsecond=0)
+        stop = min(end, now)
+        while cur <= stop:
+            hours.add(cur)
+            cur += timedelta(hours=1)
+    return sorted(hours)
+
+
+def write_json_atomic(path: Path, payload: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    json.loads(tmp.read_text(encoding="utf-8"))
+    tmp.replace(path)
+
+
 def main():
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     existing = load_existing()
-    # First run backfills 48 h; later runs refresh the last 4 h and retain 14 days.
-    hours = 48 if not existing else 4
     records = list(existing)
-    for h in range(hours, 0, -1):
-        dt = now - timedelta(hours=h)
+    attempted = succeeded = decoded_obs = 0
+    errors = []
+
+    targets = set(recent_etn_hours(now, lookback_days=7))
+
+    # Always refresh the latest four completed hours.
+    for h in range(4, 0, -1):
+        targets.add(now - timedelta(hours=h))
+
+    # Fallback when no hazard KML is available.
+    if not targets:
+        for h in range(30, 0, -1):
+            targets.add(now - timedelta(hours=h))
+
+    # Avoid re-downloading historical hours already represented, while still
+    # refreshing recent hours for late/recovered MADIS observations.
+    existing_hours = set()
+    for r in existing:
         try:
-            records.extend(parse_hour(fetch_hour(dt)))
-            print("decoded", dt.isoformat())
+            t = datetime.fromisoformat(r["time"].replace("Z", "+00:00"))
+            existing_hours.add(t.replace(minute=0, second=0, microsecond=0))
+        except Exception:
+            pass
+
+    refresh_cutoff = now - timedelta(hours=8)
+    targets = sorted(t for t in targets if t >= refresh_cutoff or t not in existing_hours)
+    print("MADIS target hours:", len(targets))
+
+    for dt in targets:
+        attempted += 1
+        try:
+            parsed = parse_hour(fetch_hour(dt))
+            records.extend(parsed)
+            succeeded += 1
+            decoded_obs += len(parsed)
+            print("decoded", dt.isoformat(), "cwop_obs", len(parsed))
         except Exception as exc:
-            print("warning", dt.isoformat(), exc)
+            msg = f"{dt.isoformat()} {type(exc).__name__}: {exc}"
+            errors.append(msg)
+            print("warning", msg)
+
     cutoff = now - timedelta(days=14)
     dedup = {}
     for r in records:
@@ -204,10 +283,17 @@ def main():
             continue
         key = (r.get("id"), r.get("time"))
         dedup[key] = r
+
     obs = sorted(dedup.values(), key=lambda x: (x["time"], x["id"]))
     stations = {}
     for r in obs:
-        stations[r["id"]] = {"id": r["id"], "provider": r.get("provider"), "lat": r["lat"], "lon": r["lon"]}
+        stations[r["id"]] = {
+            "id": r["id"],
+            "provider": r.get("provider"),
+            "lat": r["lat"],
+            "lon": r["lon"],
+        }
+
     payload = {
         "generatedUtc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "source": "NOAA MADIS public mesonet / CWOP-APRS",
@@ -216,14 +302,17 @@ def main():
             "attemptedHours": attempted,
             "successfulHours": succeeded,
             "decodedThisRun": decoded_obs,
+            "historicalTargetHours": len(targets),
             "errors": errors[-12:],
         },
         "stations": sorted(stations.values(), key=lambda x: x["id"]),
         "observations": obs,
     }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, separators=(",", ":")))
+
+    write_json_atomic(OUT, payload)
     print("stations", len(stations), "observations", len(obs))
+
+
 
 
 if __name__ == "__main__":
