@@ -58,7 +58,6 @@ jobs:
           python-version: "3.12"
 
       - name: Build static cold-season data
-        if: ${{ github.event_name != 'push' || contains(github.event.head_commit.modified, 'scripts/build_season.py') || contains(github.event.head_commit.modified, '.github/workflows/pages.yml') }}
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -80,7 +79,6 @@ jobs:
           fi
 
       - name: Save generated datasets to the repository
-        if: ${{ github.event_name != 'push' }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
