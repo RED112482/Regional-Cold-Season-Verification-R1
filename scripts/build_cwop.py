@@ -193,12 +193,27 @@ def main():
 
     now = datetime.now(timezone.utc)
     windows = recent_etn_windows(now, WINDOW_DAYS)
-    if windows:
-        start = min(a for a, _ in windows)
-        end = max(b for _, b in windows)
-    else:
-        start = now - timedelta(days=2)
-        end = now
+
+    # Always retain a rolling recent window in addition to hazard-specific
+    # ETN windows.  Hazard KML and the CWOP workflow can update at different
+    # times, so an ETN issued after the last hazard-data refresh must not leave
+    # the browser with zero CWOP observations for an otherwise valid event.
+    rolling_start = now - timedelta(days=2)
+    rolling_end = now
+    windows.append((rolling_start, rolling_end))
+
+    # Merge overlapping/adjacent windows after adding the rolling fallback.
+    windows = sorted(windows)
+    merged = []
+    for a, b in windows:
+        if not merged or a > merged[-1][1] + timedelta(minutes=30):
+            merged.append([a, b])
+        else:
+            merged[-1][1] = max(merged[-1][1], b)
+    windows = [(a, b) for a, b in merged]
+
+    start = min(a for a, _ in windows)
+    end = max(b for _, b in windows)
     start_s = start.strftime("%Y%m%d%H%M")
     end_s = end.strftime("%Y%m%d%H%M")
 
@@ -290,6 +305,7 @@ def main():
         "generatedUtc": now.isoformat().replace("+00:00", "Z"),
         "source": "Synoptic Data APRSWXNET/CWOP network 65",
         "windowDays": WINDOW_DAYS,
+        "rollingRecentHours": 48,
         "eventWindows": [{"start": a.isoformat().replace("+00:00","Z"), "end": b.isoformat().replace("+00:00","Z")} for a,b in windows],
         "status": {
             "cwAs": CWAS,
