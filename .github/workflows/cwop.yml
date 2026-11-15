@@ -35,6 +35,7 @@ jobs:
         shell: bash
         run: |
           test -s site/data/cwop_recent.json
+          test -s site/data/cwop_daily.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -54,15 +55,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cp site/data/cwop_recent.json /tmp/cwop_recent.json
+          cp site/data/cwop_daily.json /tmp/cwop_daily.json
           rm -rf /tmp/cwop
           cp -R site/data/cwop /tmp/cwop
           git fetch origin main
           git reset --hard origin/main
           mkdir -p site/data
           cp /tmp/cwop_recent.json site/data/cwop_recent.json
+          cp /tmp/cwop_daily.json site/data/cwop_daily.json
           rm -rf site/data/cwop
           cp -R /tmp/cwop site/data/cwop
-          git add site/data/cwop_recent.json site/data/cwop
+          git add site/data/cwop_recent.json site/data/cwop_daily.json site/data/cwop
           if git diff --cached --quiet; then
             echo "CWOP data unchanged."
           else
