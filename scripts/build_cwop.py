@@ -22,6 +22,8 @@ OUT_DIR = Path("site/data/cwop")
 DAILY_OUT = Path("site/data/cwop_daily.json")
 LOCAL_TZ = ZoneInfo("America/Chicago")
 HAZARDS = Path("site/data/hazards/2026.kml")
+COUNTIES = Path("site/data/counties.geojson")
+REGIONAL_STATES = ["AL", "MS", "FL", "LA", "GA", "AR"]
 TOKEN = os.environ.get("SYNOPTIC_TOKEN", "").strip()
 CWAS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 NETWORK = "65"
@@ -113,16 +115,97 @@ def in_windows(dt: datetime, windows):
     return any(a <= dt <= b for a, b in windows)
 
 
-def discover():
-    """Discover active CWOP/APRS stations using the verified Synoptic latest endpoint.
 
-    The latest endpoint is intentionally used instead of stations/metadata because it
-    works with the public Synoptic token used by GitHub Actions and returns the same
-    station metadata plus a current observation payload.  MNET_ID is returned as a
-    string (for example "65"), so normalize before validating the network.
-    """
+def point_in_ring(x, y, ring):
+    inside = False
+    if not ring:
+        return False
+    j = len(ring) - 1
+    for i in range(len(ring)):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        denom = (yj - yi) if (yj - yi) else 1e-12
+        hit = ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / denom + xi)
+        if hit:
+            inside = not inside
+        j = i
+    return inside
+
+
+def feature_contains(feature, lon, lat):
+    geom = (feature or {}).get("geometry") or {}
+    coords = geom.get("coordinates") or []
+    if geom.get("type") == "Polygon":
+        if not coords or not point_in_ring(lon, lat, coords[0]):
+            return False
+        return not any(point_in_ring(lon, lat, hole) for hole in coords[1:])
+    if geom.get("type") == "MultiPolygon":
+        return any(
+            poly and point_in_ring(lon, lat, poly[0])
+            and not any(point_in_ring(lon, lat, hole) for hole in poly[1:])
+            for poly in coords
+        )
+    return False
+
+
+def load_counties():
+    try:
+        payload = json.loads(COUNTIES.read_text(encoding="utf-8"))
+        return payload if isinstance(payload.get("features"), list) else {"features": []}
+    except Exception as exc:
+        print("Warning: county polygons unavailable for CWOP discovery:", exc)
+        return {"features": []}
+
+
+def county_for_point(counties, lon, lat):
+    for feature in counties.get("features", []):
+        if feature_contains(feature, lon, lat):
+            p = feature.get("properties") or {}
+            cwa = str(p.get("cwa") or "").upper()
+            if cwa in CWAS:
+                return {
+                    "cwa": cwa,
+                    "fips": str(p.get("fips") or "").zfill(5),
+                    "county": str(p.get("countyname") or ""),
+                    "state": str(p.get("state") or "").upper(),
+                }
+    return None
+
+
+def add_discovered_station(stations, srow, counties, fallback_cwa=""):
+    mnet = str(srow.get("MNET_ID") or "").strip()
+    if mnet and mnet != NETWORK:
+        return False
+    stid = str(srow.get("STID") or "").strip()
+    lat = num(srow.get("LATITUDE"))
+    lon = num(srow.get("LONGITUDE"))
+    if not stid or lat is None or lon is None:
+        return False
+    county = county_for_point(counties, lon, lat)
+    cwa = county["cwa"] if county else str(fallback_cwa or "").upper()
+    if cwa not in CWAS:
+        return False
+    stations[stid] = {
+        "id": stid,
+        "name": srow.get("NAME") or stid,
+        "provider": "Synoptic APRSWXNET/CWOP",
+        "lat": lat,
+        "lon": lon,
+        "cwa": cwa,
+        "countyFips": county["fips"] if county else "",
+        "countyName": county["county"] if county else "",
+        "state": county["state"] if county else "",
+    }
+    return True
+
+
+def discover():
+    """Discover active CWOP/APRS stations and assign them by actual county polygon."""
     stations = {}
     errors = []
+    counties = load_counties()
+
+    # First use the efficient CWA-scoped discovery.
     for cwa in CWAS:
         try:
             d = get_json("stations/latest", {
@@ -143,28 +226,10 @@ def discover():
             print(f"{cwa} latest stations returned:", len(rows))
 
             for s in rows:
-                # Synoptic returns MNET_ID as a string in /stations/latest.
-                mnet = str(s.get("MNET_ID") or "").strip()
-                if mnet and mnet != NETWORK:
-                    continue
+                add_discovered_station(stations, s, counties, fallback_cwa=cwa)
 
                 stid = str(s.get("STID") or "").strip()
-                if not stid:
-                    continue
-                lat = num(s.get("LATITUDE"))
-                lon = num(s.get("LONGITUDE"))
-                if lat is None or lon is None:
-                    continue
-
-                stations[stid] = {
-                    "id": stid,
-                    "name": s.get("NAME") or stid,
-                    "provider": "Synoptic APRSWXNET/CWOP",
-                    "lat": lat,
-                    "lon": lon,
-                    "cwa": cwa,
-                }
-
+                mnet = str(s.get("MNET_ID") or "").strip()
                 if stid == "G1930":
                     obs = s.get("OBSERVATIONS") or {}
                     temp = None
@@ -182,6 +247,49 @@ def discover():
                     )
         except Exception as exc:
             errors.append(f"{cwa} latest: {type(exc).__name__}: {exc}")
+
+    # CWA metadata is not reliable for every APRSWXNET station. Discover the
+    # same network by state as a fallback, then accept a station only if its
+    # coordinates fall inside one of our NOAA county polygons.
+    for state in REGIONAL_STATES:
+        try:
+            d = get_json("stations/latest", {
+                "state": state,
+                "network": NETWORK,
+                "status": "active",
+                "units": "english,speed|kts",
+                "obtimezone": "UTC",
+                "qc": "off",
+            })
+            summary = d.get("SUMMARY") or {}
+            if str(summary.get("RESPONSE_CODE", "")) != "1":
+                errors.append(f"{state} state latest API: {summary}")
+                continue
+            rows = d.get("STATION", []) or []
+            print(f"{state} state fallback stations returned:", len(rows))
+            for row in rows:
+                add_discovered_station(stations, row, counties)
+        except Exception as exc:
+            errors.append(f"{state} state latest: {type(exc).__name__}: {exc}")
+
+    # Targeted safeguard for the known Chatom CWOP station. This does not
+    # bypass geometry: it is still accepted only when its coordinates land
+    # inside one of the regional county polygons.
+    try:
+        d = get_json("stations/latest", {
+            "stid": "G1930",
+            "network": NETWORK,
+            "status": "active",
+            "units": "english,speed|kts",
+            "obtimezone": "UTC",
+            "qc": "off",
+        })
+        for row in d.get("STATION", []) or []:
+            if add_discovered_station(stations, row, counties):
+                print("G1930 targeted discovery accepted by county polygon")
+    except Exception as exc:
+        errors.append(f"G1930 targeted latest: {type(exc).__name__}: {exc}")
+
     return stations, errors
 
 
