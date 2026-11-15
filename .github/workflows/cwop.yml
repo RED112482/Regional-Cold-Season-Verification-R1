@@ -29,7 +29,7 @@ jobs:
           python-version: "3.12"
       - name: Install MADIS reader
         run: pip install numpy netCDF4
-      - name: Build compact CWOP cache
+      - name: Build compact CWOP cache (R14)
         run: python scripts/build_cwop.py
       - name: Save CWOP JSON
         shell: bash
