@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: "nbm-verification-data"
@@ -72,3 +74,15 @@ jobs:
             git commit -m "Refresh NBM verification trends"
             git push origin HEAD:main
           fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload refreshed site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy refreshed verification to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
