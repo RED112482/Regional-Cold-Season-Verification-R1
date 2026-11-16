@@ -5265,8 +5265,9 @@
     }
   },
   "errors": [
+    "2026-11-11 F060: no forecast snapshot",
     "2026-11-11 F060: no forecast snapshot"
   ],
   "ndfdHistorySource": "Repository forecast.json snapshots",
-  "ndfdHistoryGeneratedUtc": "2026-11-16T07:08:41Z"
+  "ndfdHistoryGeneratedUtc": "2026-11-16T07:11:04Z"
 }
