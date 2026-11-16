@@ -861,6 +861,20 @@ function addVerificationMapLabel(r,lat,lon){
         html='<div class="vlabel"><span class="'+(neutral?'vneutral':'vvalue')+'">'+esc(verificationValueText(r))+'</span>'+status+dur+'</div>';
   L.marker([lat,lon],{interactive:false,icon:L.divIcon({className:'verify-map-label',html,iconSize:[170,24],iconAnchor:[-9,12]})}).addTo(state.verificationLayer);
 }
+function normalizeSkyCategory(v){
+  const m=String(v||'').trim().toUpperCase().match(/^(CLR|SKC|FEW|SCT|BKN|OVC|VV)/);
+  return m?m[1]:'';
+}
+function mostRestrictiveSky(values){
+  const rank={CLR:0,SKC:0,FEW:1,SCT:2,BKN:3,OVC:4,VV:4};
+  let best='',bestRank=-1;
+  for(const v of (values||[])){
+    const c=normalizeSkyCategory(v),r=rank[c];
+    if(c&&r>bestRank){best=c;bestRank=r}
+  }
+  return best;
+}
+
 function parseMetarFrostInputs(metar){
   const text=String(metar||'').trim().toUpperCase();
   if(!text)return{tempF:null,dewF:null,windKt:null,sky:''};
@@ -878,10 +892,9 @@ function parseMetarFrostInputs(metar){
   const wind=text.match(/(?:^|\s)(?:\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT(?=\s|$)/);
   if(wind)windKt=Number(wind[1]);
 
-  // Prefer the first reported cloud-coverage group. Heights are irrelevant to
-  // the PotFrost categorical sky input.
-  const cloud=text.match(/(?:^|\s)(CLR|SKC|FEW|SCT|BKN|OVC|VV)(?:\d{3}|\/\/\/)?(?=\s|$)/);
-  if(cloud)sky=cloud[1];
+  // Use the most restrictive reported sky layer for frost potential.
+  const clouds=[...text.matchAll(/(?:^|\s)(CLR|SKC|FEW|SCT|BKN|OVC|VV)(?:\d{3}|\/\/\/)?(?=\s|$)/g)].map(m=>m[1]);
+  sky=mostRestrictiveSky(clouds);
 
   return{tempF:saneAirTempF(tempF),dewF:saneAirTempF(dewF),windKt:num(windKt),sky};
 }
@@ -1008,14 +1021,15 @@ async function loadCwopSupplement(e,start,finish){
   }
   renderSupplementPoints(scored,'Synoptic CWOP / APRS','#62b7d9','#d2f2ff','CWOP');
 }
-async function loadEventPointVerification(e){renderSelectedEventDetail();resetVerificationTotals();state.primaryMetarSkySamples=[];state.sourceCounts={METAR:0,COOP:0,RWIS:0,USCRN:0,DCP:0,CWOP:0};updatePointSourceSummary();const start=new Date(e.begin),finish=new Date(Math.min(Date.parse(e.end),Date.now()));if(isNaN(start)||isNaN(finish)||finish<=start){showPointError('This event has not reached its valid observation window yet.');return}state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';let primaryResults=[];try{const cat=await ensureStationCatalog();if(cat){const staticSites=(cat.allSites||[]).filter(s=>s.wfo===e.wfo&&pointInCwa(e.wfo,s.lon,s.lat)),liveSites=await liveAviationSitesForCwa(e.wfo),merged=new Map();staticSites.forEach(x=>merged.set(String(x.obs||'').toUpperCase(),x));liveSites.forEach(x=>{const k=String(x.obs||'').toUpperCase();if(!merged.has(k))merged.set(k,x)});const stations=[...merged.values()];if(stations.length){const q=new URLSearchParams();['tmpf','dwpf','feel','sknt','skyc1','metar'].forEach(v=>q.append('data',v));stations.forEach(s=>q.append('station',s.obs));q.set('sts',start.toISOString());q.set('ets',finish.toISOString());q.set('tz','UTC');q.set('latlon','yes');q.set('format','onlycomma');q.set('missing','empty');const u='https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?'+q.toString(),r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('IEM METAR HTTP '+r.status);const rows=parseCsv(await r.text()),by=new Map();stations.forEach(st=>{const key=String(st.obs||'').trim().toUpperCase(),rec={station:st,minTemp:null,minTempTime:null,minFeel:null,minFeelTime:null,maxPotFrost:null,maxPotFrostTime:null,maxPotFrostSource:'',min6hTemp:null,min6hTime:null,samples:[],rows:0};by.set(key,rec);if(key.length===3)by.set('K'+key,rec);if(key.length===4&&key.startsWith('K'))by.set(key.slice(1),rec)});rows.forEach(row=>{
+async function loadEventPointVerification(e){renderSelectedEventDetail();resetVerificationTotals();state.primaryMetarSkySamples=[];state.sourceCounts={METAR:0,COOP:0,RWIS:0,USCRN:0,DCP:0,CWOP:0};updatePointSourceSummary();const start=new Date(e.begin),finish=new Date(Math.min(Date.parse(e.end),Date.now()));if(isNaN(start)||isNaN(finish)||finish<=start){showPointError('This event has not reached its valid observation window yet.');return}state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';let primaryResults=[];try{const cat=await ensureStationCatalog();if(cat){const staticSites=(cat.allSites||[]).filter(s=>s.wfo===e.wfo&&pointInCwa(e.wfo,s.lon,s.lat)),liveSites=await liveAviationSitesForCwa(e.wfo),merged=new Map();staticSites.forEach(x=>merged.set(String(x.obs||'').toUpperCase(),x));liveSites.forEach(x=>{const k=String(x.obs||'').toUpperCase();if(!merged.has(k))merged.set(k,x)});const stations=[...merged.values()];if(stations.length){const q=new URLSearchParams();['tmpf','dwpf','relh','feel','sknt','skyc1','skyc2','skyc3','skyc4','metar'].forEach(v=>q.append('data',v));stations.forEach(s=>q.append('station',s.obs));q.set('sts',start.toISOString());q.set('ets',finish.toISOString());q.set('tz','UTC');q.set('latlon','yes');q.set('format','onlycomma');q.set('missing','empty');const u='https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?'+q.toString(),r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('IEM METAR HTTP '+r.status);const rows=parseCsv(await r.text()),by=new Map();stations.forEach(st=>{const key=String(st.obs||'').trim().toUpperCase(),rec={station:st,minTemp:null,minTempTime:null,minFeel:null,minFeelTime:null,maxPotFrost:null,maxPotFrostTime:null,maxPotFrostSource:'',min6hTemp:null,min6hTime:null,samples:[],rows:0};by.set(key,rec);if(key.length===3)by.set('K'+key,rec);if(key.length===4&&key.startsWith('K'))by.set(key.slice(1),rec)});rows.forEach(row=>{
         const id=String(row.station||'').trim().toUpperCase(),a=by.get(id);if(!a)return;
         const rawMetar=row.metar||'',fallback=parseMetarFrostInputs(rawMetar),
               t=saneAirTempF(row.tmpf)??fallback.tempF,
-              td=saneAirTempF(row.dwpf)??fallback.dewF,
+              rh=num(row.relh),
+              td=saneAirTempF(row.dwpf)??dewpointFromRhF(t,rh)??fallback.dewF,
               f=saneApparentF(row.feel),
               w=num(row.sknt)??fallback.windKt,
-              sky=String(row.skyc1||fallback.sky||'').trim().toUpperCase(),
+              sky=mostRestrictiveSky([row.skyc1,row.skyc2,row.skyc3,row.skyc4,fallback.sky]),
               valid=row.valid||row.timestamp||'',min6=metarSixHourMinF(rawMetar),
               effectiveT=minFinite(t,min6),tm=new Date(valid);
         a.rows++;
@@ -1033,7 +1047,7 @@ async function loadEventPointVerification(e){renderSelectedEventDetail();resetVe
           const t=saneAirTempF(sm.rawT??sm.t),td=saneAirTempF(sm.td),w=num(sm.w);
           if(!isNum(t)||!isNum(td)||!isNum(w))continue;
           let sky=sm.sky||'',source='';
-          if(sky)source='own sky';
+          if(sky)source='own/parsed sky';
           else{
             const near=nearestMetarSky(a.station.lat,a.station.lon,sm.time);
             if(near){sky=near.sky;source='sky '+(near.station||'nearby')+' · '+near.mi.toFixed(0)+' mi / '+Math.round(near.mins)+' min'}
@@ -1149,7 +1163,7 @@ function scorePoint(a,e){
 }
 function observedPotFrostScore(t,td,windKt,skyCode){
   if(!isNum(t)||!isNum(td)||!isNum(windKt))return null;
-  const dep=t-td,rawSky=String(skyCode||'').trim().toUpperCase(),mSky=rawSky.match(/^(CLR|SKC|FEW|SCT|BKN|OVC|VV)/),sky=mSky?mSky[1]:'';
+  const dep=t-td,sky=normalizeSkyCategory(skyCode);
   if(!sky)return null;
   if(dep>9||windKt>7||sky==='BKN'||sky==='OVC'||sky==='VV')return 0;
   let dewscore=dep<=5?6:3;
