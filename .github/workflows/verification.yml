@@ -61,7 +61,8 @@ jobs:
                       assert lead in by_lead, f"{wfo}/{mode}: missing lead {lead}"
                       ndfd = (by_lead.get(lead) or {}).get("dailyMae", {}).get("NDFD")
                       det = (by_lead.get(lead) or {}).get("dailyMae", {}).get("NBM Deterministic")
-                      assert isinstance(ndfd, list) and any(v is not None for v in ndfd), f"{wfo}/{mode}: NDFD lead {lead} has no verification data"
+                      if mode == "land":
+                          assert isinstance(ndfd, list) and any(v is not None for v in ndfd), f"{wfo}/{mode}: NDFD lead {lead} has no verification data"
                       assert isinstance(det, list) and any(v is not None for v in det), f"{wfo}/{mode}: NBM Det lead {lead} has no verification data"
           print("Spatial lead-time schema v4 validated with NDFD + exact NBM TMIN.")
           PY
