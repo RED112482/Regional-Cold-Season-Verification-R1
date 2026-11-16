@@ -11,7 +11,6 @@ on:
       - "site/data/cwop_recent.json"
       - "site/data/cwop_daily.json"
       - "site/data/cwop/**"
-      - "scripts/**"
       - ".github/workflows/pages.yml"
       - "README.md"
   schedule:
