@@ -959,7 +959,7 @@ function dewpointFromRhF(tempF,rh){
   const f=dc*9/5+32;return isNum(f)?f:null;
 }
 function potFrostFromSamples(samples,lat,lon){
-  let maxPot=null,bestSky=null;
+  let maxPot=null,bestSky=null,bestDetails=null;
   for(const x of (samples||[])){
     if(!x||!(x.time instanceof Date)||isNaN(x.time))continue;
     const t=saneAirTempF(x.t),td=saneAirTempF(x.td),w=num(x.w);
@@ -967,9 +967,9 @@ function potFrostFromSamples(samples,lat,lon){
     const skyInfo=nearestMetarSky(lat,lon,x.time);
     if(!skyInfo)continue;
     const pot=observedPotFrostScore(t,td,w,skyInfo.sky);
-    if(isNum(pot)&&(maxPot===null||pot>maxPot)){maxPot=pot;bestSky=skyInfo}
+    if(isNum(pot)&&(maxPot===null||pot>maxPot)){maxPot=pot;bestSky=skyInfo;bestDetails={t,td,w,sky:skyInfo.sky,time:x.time}}
   }
-  return{pot:maxPot,sky:bestSky};
+  return{pot:maxPot,sky:bestSky,details:bestDetails};
 }
 function nearestMetarSky(lat,lon,time){
   const target=time instanceof Date?time:new Date(time);
@@ -997,12 +997,12 @@ async function loadCwopSupplement(e,start,finish){
   const scored=[];
   for(const g of groups.values()){
     const county=findCountyForPoint(g.site.lon,g.site.lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e);
-    let minTemp=null,minFeel=null,maxPot=null,minTime=null,samples=[];
+    let minTemp=null,minFeel=null,maxPot=null,maxPotDetails=null,minTime=null,samples=[];
     for(const r of g.rows){
       const t=saneAirTempF(r.tempF),td=saneAirTempF(r.dewF),w=num(r.windKt),tm=new Date(r.time),feel=windChillF(t,w),skyInfo=nearestMetarSky(g.site.lat,g.site.lon,tm),sky=skyInfo?skyInfo.sky:'',pot=observedPotFrostScore(t,td,w,sky);
       if(isNum(t)&&(minTemp===null||t<minTemp)){minTemp=t;minTime=r.time}
       if(isNum(feel)&&(minFeel===null||feel<minFeel))minFeel=feel;
-      if(isNum(pot)&&(maxPot===null||pot>maxPot))maxPot=pot;
+      if(isNum(pot)&&(maxPot===null||pot>maxPot)){maxPot=pot;maxPotDetails={t,td,w,sky,time:tm}}
       samples.push({time:tm,t,feel,pot});
     }
     let value=null,criterionMet=null,valueSource='CWOP/APRS';
@@ -1014,7 +1014,7 @@ async function loadCwopSupplement(e,start,finish){
     // sky cover is unavailable. Keep that station visible as supplemental
     // temperature data; only assign HIT/MISS when the criterion is calculable.
     const hasObservedData=crit.metric==='potfrost'?isNum(minTemp):isNum(value);
-    const base={station:g.site.id,name:g.site.name,lat:g.site.lat,lon:g.site.lon,minTemp,minFeel,potFrost:maxPot,value,time:minTime,criterion:crit,source:'CWOP/APRS',hasData:hasObservedData,criterionMet,durationMinutes:durationFromSamples(samples,crit),valueSource};
+    const base={station:g.site.id,name:g.site.name,lat:g.site.lat,lon:g.site.lon,minTemp,minFeel,potFrost:maxPot,pfDetails:maxPotDetails,value,time:minTime,criterion:crit,source:'CWOP/APRS',hasData:hasObservedData,criterionMet,durationMinutes:durationFromSamples(samples,crit),valueSource};
     if(criterionMet===null){base.hit=null;base.resultCode='SUPP';base.inHazard=eventContainsPoint(e,g.site.lon,g.site.lat)}
     else{const cls=classifyVerificationResult(base,e);base.hit=cls.hit;base.resultCode=cls.code;base.inHazard=cls.inHazard}
     scored.push(base);
@@ -1034,7 +1034,7 @@ async function loadEventPointVerification(e){renderSelectedEventDetail();resetVe
       q.set('year1',start.getUTCFullYear());q.set('month1',start.getUTCMonth()+1);q.set('day1',start.getUTCDate());q.set('hour1',start.getUTCHours());q.set('minute1',start.getUTCMinutes());
       q.set('year2',finish.getUTCFullYear());q.set('month2',finish.getUTCMonth()+1);q.set('day2',finish.getUTCDate());q.set('hour2',finish.getUTCHours());q.set('minute2',finish.getUTCMinutes());
       q.set('tz','Etc/UTC');q.set('latlon','yes');q.set('format','onlycomma');q.set('missing','empty');q.set('trace','T');q.set('direct','no');q.append('report_type','3');q.append('report_type','4');
-      const u='https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?'+q.toString(),r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('IEM METAR HTTP '+r.status);const rows=parseCsv(await r.text()),by=new Map();stations.forEach(st=>{const key=String(st.obs||'').trim().toUpperCase(),rec={station:st,minTemp:null,minTempTime:null,minFeel:null,minFeelTime:null,maxPotFrost:null,maxPotFrostTime:null,maxPotFrostSource:'',min6hTemp:null,min6hTime:null,samples:[],rows:0};by.set(key,rec);if(key.length===3)by.set('K'+key,rec);if(key.length===4&&key.startsWith('K'))by.set(key.slice(1),rec)});rows.forEach(row=>{
+      const u='https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?'+q.toString(),r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('IEM METAR HTTP '+r.status);const rows=parseCsv(await r.text()),by=new Map();stations.forEach(st=>{const key=String(st.obs||'').trim().toUpperCase(),rec={station:st,minTemp:null,minTempTime:null,minFeel:null,minFeelTime:null,maxPotFrost:null,maxPotFrostTime:null,maxPotFrostSource:'',maxPotFrostDetails:null,min6hTemp:null,min6hTime:null,samples:[],rows:0};by.set(key,rec);if(key.length===3)by.set('K'+key,rec);if(key.length===4&&key.startsWith('K'))by.set(key.slice(1),rec)});rows.forEach(row=>{
         const id=String(row.station||'').trim().toUpperCase(),a=by.get(id);if(!a)return;
         const rawMetar=row.metar||'',fallback=parseMetarFrostInputs(rawMetar),
               t=saneAirTempF(row.tmpf)??fallback.tempF,
@@ -1069,7 +1069,7 @@ async function loadEventPointVerification(e){renderSelectedEventDetail();resetVe
           const pf=observedPotFrostScore(t,td,w,sky);
           sm.pot=pf;
           if(isNum(pf)&&(a.maxPotFrost===null||pf>a.maxPotFrost)){
-            a.maxPotFrost=pf;a.maxPotFrostTime=sm.time.toISOString();a.maxPotFrostSource='PotFrost · '+source;
+            a.maxPotFrost=pf;a.maxPotFrostTime=sm.time.toISOString();a.maxPotFrostSource='PotFrost · '+source;a.maxPotFrostDetails={t,td,w,sky,time:sm.time};
           }
         }
       });
@@ -1092,7 +1092,7 @@ function renderCoopSupplement(rows){
     const code=r.resultCode||'SUPP',color=code==='HIT'?'#4bf0a0':code==='NO HIT'?'#ffd84d':code==='MISS'?'#ff647a':'#66727d',edge=code==='HIT'?'#d9ffeb':code==='NO HIT'?'#fff2a6':code==='MISS'?'#ffe0e5':'#a5afb8';
     L.circleMarker([r.lat,r.lon],{radius:6,color:edge,weight:2,fillColor:color,fillOpacity:.94,dashArray:'2,2'})
       .bindTooltip(r.station+' · COOP · '+verificationValueText(r)+(code==='OUTSIDE'||code==='SUPP'?'':' · '+code),{sticky:true,className:'county-tip'})
-      .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.network)+' · COOP 24-hour low</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Value source</span><strong>'+esc(r.valueSource||'—')+'</strong><span>Station checked</span><strong>YES</strong><span>Instantaneous low</span><strong>'+fmt(r.minInstantTemp)+'°F</strong><span>METAR 6-h min</span><strong>'+fmt(r.min6hTemp)+'°F</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Result</span><strong>'+code+'</strong></div>')
+      .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.network)+' · COOP 24-hour low</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Value source</span><strong>'+esc(r.valueSource||'—')+'</strong><span>Station checked</span><strong>YES</strong><span>Instantaneous low</span><strong>'+fmt(r.minInstantTemp)+'°F</strong><span>METAR 6-h min</span><strong>'+fmt(r.min6hTemp)+'°F</strong><span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Result</span><strong>'+code+'</strong></div>'+frostExplanationHtml(r))
       .addTo(state.verificationLayer);
     addVerificationMapLabel(r,r.lat,r.lon);
   });
@@ -1147,7 +1147,7 @@ function scoreSupplementPoint(site,minTemp,minFeel,time,e,source,samples=[]){
   }else criterionMet=isNum(value)&&isNum(crit.threshold)?value<=crit.threshold:null;
   const durationMinutes=crit.metric==='potfrost'?null:durationFromSamples(samples,crit),
         hasObserved=isNum(minTemp)||isNum(value),
-        base={station:site.id,name:site.name,lat:site.lat,lon:site.lon,minTemp,minFeel,potFrost,value,time,criterion:crit,source,hasData:hasObserved,criterionMet,durationMinutes,valueSource};
+        base={station:site.id,name:site.name,lat:site.lat,lon:site.lon,minTemp,minFeel,potFrost,pfDetails:crit.metric==='potfrost'?pf.details:null,value,time,criterion:crit,source,hasData:hasObserved,criterionMet,durationMinutes,valueSource};
   if(criterionMet===null)return Object.assign(base,{hit:null,resultCode:'SUPP',inHazard:eventContainsPoint(e,site.lon,site.lat)});
   const cls=classifyVerificationResult(base,e);return Object.assign(base,{hit:cls.hit,resultCode:cls.code,inHazard:cls.inHazard});
 }
@@ -1161,7 +1161,7 @@ function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){
     const code=r.resultCode||'SUPP',color=code==='HIT'?'#4bf0a0':code==='NO HIT'?'#ffd84d':code==='MISS'?'#ff647a':'#66727d',edge=code==='HIT'?'#d9ffeb':code==='NO HIT'?'#fff2a6':code==='MISS'?'#ffe0e5':'#a5afb8';
     L.circleMarker([r.lat,r.lon],{radius:6.5,color:edge,weight:2,fillColor:color,fillOpacity:.94,dashArray:'3,2'})
       .bindTooltip(r.station+' · '+r.source+' · '+verificationValueText(r)+(code==='OUTSIDE'||code==='SUPP'?'':' · '+code)+(isNum(r.durationMinutes)&&code!=='OUTSIDE'&&code!=='SUPP'?' · '+durationText(r.durationMinutes)+' in criteria':''),{sticky:true,className:'county-tip'})
-      .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.source)+'</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Air temperature low</span><strong>'+fmt(r.minTemp)+'°F</strong>'+(r.criterion&&r.criterion.metric==='potfrost'?'<span>ProbFrost</span><strong>'+(isNum(r.potFrost)?'PF '+fmt(r.potFrost):'Unavailable')+'</strong><span>PF source</span><strong>'+esc(r.valueSource||'—')+'</strong>':'')+'<span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Duration in criteria</span><strong>'+(isNum(r.durationMinutes)?durationText(r.durationMinutes):'—')+'</strong><span>Result</span><strong>'+code+'</strong></div>')
+      .bindPopup('<b>'+esc(r.station)+' · '+esc(r.name)+'</b><br><small>'+esc(r.source)+'</small><div class="popup-rule"></div><div class="popup-grid"><span>Verification value</span><strong>'+esc(verificationValueText(r))+'</strong><span>Air temperature low</span><strong>'+fmt(r.minTemp)+'°F</strong>'+(r.criterion&&r.criterion.metric==='potfrost'?'<span>ProbFrost</span><strong>'+(isNum(r.potFrost)?'PF '+fmt(r.potFrost):'Unavailable')+'</strong><span>PF source</span><strong>'+esc(r.valueSource||'—')+'</strong>':'')+'<span>Inside ETN</span><strong>'+(r.inHazard?'YES':'NO')+'</strong><span>Met hazard criterion</span><strong>'+(r.criterionMet===null?'N/A':r.criterionMet?'YES':'NO')+'</strong><span>Criterion</span><strong>'+esc(r.criterion.label)+'</strong><span>Duration in criteria</span><strong>'+(isNum(r.durationMinutes)?durationText(r.durationMinutes):'—')+'</strong><span>Result</span><strong>'+code+'</strong></div>'+frostExplanationHtml(r))
       .addTo(state.verificationLayer);
     addVerificationMapLabel(r,r.lat,r.lon);
   });
@@ -1175,7 +1175,7 @@ function scorePoint(a,e){
   else{value=effectiveMin;time=(isNum(a.min6hTemp)&&(!isNum(a.minTemp)||a.min6hTemp<=a.minTemp))?a.min6hTime:a.minTempTime;criterionMet=isNum(value)&&isNum(c.threshold)?value<=c.threshold:null;valueSource=(isNum(a.min6hTemp)&&(!isNum(a.minTemp)||a.min6hTemp<=a.minTemp))?'METAR 6-h minimum':'instantaneous'}
   const durationMinutes=durationFromSamples(a.samples||[],c),
         hasObserved=c.metric==='potfrost'?isNum(effectiveMin):isNum(value),
-        base={station:a.station,lat:a.station.lat,lon:a.station.lon,minTemp:effectiveMin,minInstantTemp:a.minTemp,min6hTemp:a.min6hTemp,minFeel:a.minFeel,potFrost:a.maxPotFrost,value,time,valueSource,criterion:c,hasData:hasObserved,criterionMet,durationMinutes};
+        base={station:a.station,lat:a.station.lat,lon:a.station.lon,minTemp:effectiveMin,minInstantTemp:a.minTemp,min6hTemp:a.min6hTemp,minFeel:a.minFeel,potFrost:a.maxPotFrost,pfDetails:a.maxPotFrostDetails,value,time,valueSource,criterion:c,hasData:hasObserved,criterionMet,durationMinutes};
   if(c.metric==='potfrost'&&criterionMet===null)return Object.assign(base,{hit:null,resultCode:'SUPP',inHazard:eventContainsPoint(e,a.station.lon,a.station.lat)});
   const cls=classifyVerificationResult(base,e);return Object.assign(base,{hit:cls.hit,resultCode:cls.code,inHazard:cls.inHazard});
 }
@@ -1196,6 +1196,29 @@ function observedPotFrostScore(t,td,windKt,skyCode){
   if(frostscore>1&&frostscore<=3)return 20;
   return 0;
 }
+function frostExplanationHtml(r){
+  if(!r||!r.criterion||r.criterion.metric!=='potfrost')return'';
+  const d=r.pfDetails||{},pf=isNum(r.potFrost)?r.potFrost:null,
+        t=isNum(d.t)?fmt(d.t)+'°F':'Missing',
+        td=isNum(d.td)?fmt(d.td)+'°F':'Missing',
+        dep=isNum(d.t)&&isNum(d.td)?fmt(d.t-d.td)+'°F':'Missing',
+        w=isNum(d.w)?fmt(d.w)+' kt':'Missing',
+        sky=d.sky||'Missing',
+        verdict=pf===null?'PF could not be calculated.':pf>=40?'PF '+fmt(pf)+' met the ≥40 verification threshold.':'PF '+fmt(pf)+' did not reach the ≥40 verification threshold.',
+        need=[];
+  if(!isNum(d.t))need.push('temperature');
+  if(!isNum(d.td))need.push('dewpoint');
+  if(!isNum(d.w))need.push('wind');
+  if(!d.sky)need.push('sky');
+  if(pf!==null){
+    if(isNum(d.t)&&d.t>37)need.push('temperature ≤37°F');
+    if(isNum(d.t)&&isNum(d.td)&&d.t-d.td>9)need.push('dewpoint depression ≤9°F');
+    if(isNum(d.w)&&d.w>7)need.push('wind ≤7 kt');
+    if(['BKN','OVC','VV'].includes(d.sky))need.push('sky SCT or clearer');
+  }
+  return '<div class="popup-rule"></div><b>Why this PF?</b><div class="popup-grid" style="margin-top:5px"><span>Temperature</span><strong>'+esc(t)+' <small>(≤37°F favorable; ≤34°F strongest)</small></strong><span>Dewpoint</span><strong>'+esc(td)+' <small>(≤34°F favorable)</small></strong><span>T−Td spread</span><strong>'+esc(dep)+' <small>(≤9°F needed; ≤5°F best)</small></strong><span>Wind</span><strong>'+esc(w)+' <small>(≤7 kt needed; ≤3 kt best)</small></strong><span>Sky</span><strong>'+esc(sky)+' <small>(SCT or clearer needed)</small></strong></div><div class="small" style="margin-top:7px"><b>'+esc(verdict)+'</b>'+(need.length?'<br>Needed/missing: '+esc([...new Set(need)].join(' · ')):'<br>All required PF ingredients were available.')+'</div>';
+}
+
 function pointCriterion(st,e){const c=st.criteria||{};if(e.type==='Frost Advisory')return{threshold:40,metric:'potfrost',label:'Observed PotFrost ≥40 (Areas/Widespread)'};if(e.type==='Freeze Watch'||e.type==='Freeze Warning')return{threshold:32,metric:'temp',label:'Freeze ≤32°F'};if(e.type==='Cold Weather Advisory')return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Local Cold Advisory'};if(e.type==='Extreme Cold Watch'||e.type==='Extreme Cold Warning')return{threshold:num(c.extremeCold),metric:'apparent',label:'Local Extreme Cold'};if(e.type==='Legacy Hard Freeze')return{threshold:25,metric:'temp',label:'Hard freeze ≤25°F'};return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Legacy wind chill proxy'}}
 function resetVerificationTotals(){state.verificationTotals={points:0,hits:0,warnings:0,misses:0}}
 function addVerificationTotals(rows){
