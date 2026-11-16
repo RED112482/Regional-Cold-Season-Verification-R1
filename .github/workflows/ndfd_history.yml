@@ -57,6 +57,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          cp site/data/verification.json /tmp/verification.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/verification.json site/data/verification.json
+
           git add site/data/verification.json
           if git diff --cached --quiet; then
             echo "No NDFD history changes."
