@@ -6,8 +6,8 @@ Method:
 - Forecast snapshot/cycle: 12Z on the preceding day.
 - NDFD: historical forecast.json snapshots already committed by this repository.
 - NBM: operational CONUS Core + QMD GRIB2 from NOAA Open Data (12Z, F024).
-- Verification: hourly URMA 2-m temperature from 00Z through 12Z; the minimum
-  at each sample point is the verifying MinT.
+- Verification: NOAA URMA full-grid TMIN, a 0-12Z minimum-temperature
+  analysis valid at 12Z (analysis of record for verification/calibration).
 - Spatial sampling: the existing NDFD raw sample nodes that fall inside each
   supported CWA's county polygons. This keeps all sources on the identical
   land-only sample.
@@ -40,7 +40,7 @@ COUNTIES = DATA / "counties.geojson"
 OUTPUT = DATA / "verification.json"
 WFO_IDS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 NBM_BUCKET = "noaa-nbm-grib2-pds"
-URMA_BUCKET = "noaa-rtma-pds"
+RTMA_BUCKET = "noaa-rtma-pds"
 URMA_BUCKET = "noaa-urma-pds"
 NDFD_BUCKET = "noaa-ndfd-pds"
 PERCENTILES = [10, 25, 50, 75, 90]
@@ -634,28 +634,10 @@ def read_nbm(init_dt, lead_hours):
             f"{expected_valid:%Y-%m-%d %HZ}; candidates={rejected}"
         )
 
-    qlines = idx_lines(NBM_BUCKET, qmd)
-    min_candidates = select_idx_candidates(qlines, ["tmp", "min"])
-    if not min_candidates:
-        raise RuntimeError(f"Could not locate NBM percentile MinT messages F{fh}")
-    pct = {}
-    for i in min_candidates:
-        vals, lats, lons, meta = fetch_message(NBM_BUCKET, qmd, i, qlines)
-        if not grib_matches_valid(meta, expected_valid):
-            continue
-        if str(meta.get("stepType") or "").lower() not in ("min", "minimum"):
-            continue
-        p = safe_float(meta.get("percentileValue"))
-        if p is not None and int(round(p)) in PERCENTILES:
-            pct[int(round(p))] = (vals, lats, lons, meta)
-
-    missing = [p for p in PERCENTILES if p not in pct]
-    if missing:
-        raise RuntimeError(
-            f"NBM percentile MinT F{fh} missing {missing} at exact valid time "
-            f"{expected_valid:%Y-%m-%d %HZ}"
-        )
-    return det, pct
+    # QMD MinT percentiles are an 18-hour minimum product (for example,
+    # 12-30h from the 12Z cycle, valid through 18Z). They are intentionally
+    # excluded from this exact 00-12Z URMA TMIN comparison.
+    return det, {}
 
 def urma_tmin_key(day):
     ds = day.strftime("%Y%m%d")
@@ -776,7 +758,7 @@ def main():
     spatial_modes = ["land", "marine", "both"]
     daily = {mode: {w: {} for w in WFO_IDS} for mode in spatial_modes}
     errors = []
-    nbm_sources = ["NBM Deterministic"] + [f"P{p}" for p in PERCENTILES]
+    nbm_sources = ["NBM Deterministic"]
     default_sources = ["NDFD"] + nbm_sources
 
     for valid_day in verify_days:
@@ -939,7 +921,7 @@ def main():
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
         "spatialModes": spatial_modes,
-        "method": "Rolling CWA MAE and mean bias versus URMA for land, official coastal-marine-zone, or combined samples. Historical NDFD MinT comes from timestamped NOAA WMO archive snapshots; NBM deterministic and percentiles use corresponding archived model cycles.",
+        "method": "Rolling CWA MAE and mean bias versus NOAA URMA TMIN for land, official coastal-marine-zone, or combined samples. Historical NDFD MinT comes from timestamped NOAA WMO archive snapshots. NBM deterministic uses the exact TMIN record for the matching 00-12Z period. QMD MinT percentiles are withheld from this exact-period comparison because their native minimum-temperature window is 18 hours (for example 12-30h from a 12Z cycle).",
         "cwas": cwas,
         "errors": errors[-60:],
     }
