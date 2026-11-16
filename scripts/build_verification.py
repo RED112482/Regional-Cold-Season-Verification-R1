@@ -338,6 +338,21 @@ def nearest_ndfd_issue(valid_day, target_dt, issuance_times=None):
     return min(times, key=lambda dt: abs((dt - target_dt).total_seconds()))
 
 
+def debug_ndfd_keys(issue_dt, limit=20):
+    """Compact diagnostic for NDFD WMO key naming near a requested issuance."""
+    root = discover_ndfd_mint_prefix()
+    prefix = f"{root}{issue_dt:%Y/%m/%d}/"
+    resp = s3.list_objects_v2(Bucket=NDFD_BUCKET, Prefix=prefix, MaxKeys=limit)
+    out = []
+    for obj in resp.get("Contents", []):
+        out.append({
+            "key": obj.get("Key"),
+            "lastModified": obj.get("LastModified").isoformat() if obj.get("LastModified") else None,
+            "size": obj.get("Size"),
+        })
+    return out
+
+
 def ndfd_archive_keys(issue_dt):
     """List archived NDFD MinT WMO files nearest the requested issuance time."""
     root = discover_ndfd_mint_prefix()
@@ -596,6 +611,11 @@ def summarize_rows(rows, source_names):
 
 
 def main():
+    if os.environ.get("DEBUG_NDFD_KEYS") == "1":
+        target = datetime(2026, 11, 14, 12, tzinfo=timezone.utc)
+        print(json.dumps(debug_ndfd_keys(target, 50), indent=2))
+        return
+
     geoms = cwa_geometries()
     now = datetime.now(timezone.utc)
     latest = now.date()
