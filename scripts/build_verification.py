@@ -19,6 +19,9 @@ import math
 import os
 import subprocess
 import tempfile
+import re
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -252,6 +255,87 @@ def discover_ndfd_mint_prefix():
         raise RuntimeError("Could not discover NDFD minimum-temperature WMO archive prefix")
     _ndfd_mint_prefix = sorted(choices, key=len)[0]
     return _ndfd_mint_prefix
+
+
+def _parse_iso_utc(value):
+    if not isinstance(value, str):
+        return None
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+    except Exception:
+        try:
+            dt = datetime.strptime(value.strip()[:16], "%Y-%m-%dT%H:%M")
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def ndfd_issuance_times(valid_day):
+    """Return NOAA-published NDFD issuance/reference times for one MinT valid time."""
+    valid_text = datetime(valid_day.year, valid_day.month, valid_day.day, 12, tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M")
+    query = urlencode({
+        "grid": "ndfd",
+        "elmt": "mint",
+        "region": "conus",
+        "vt": valid_text,
+    })
+    url = "https://digital.weather.gov/scripts/get_issuancetimes.php?" + query
+    req = Request(url, headers={"User-Agent": "Regional-Cold-Season-Verification/1.0"})
+    with urlopen(req, timeout=45) as resp:
+        raw = resp.read().decode("utf-8", errors="replace")
+
+    values = []
+    try:
+        payload = json.loads(raw)
+        def walk(obj):
+            if isinstance(obj, str):
+                values.append(obj)
+            elif isinstance(obj, list):
+                for item in obj:
+                    walk(item)
+            elif isinstance(obj, dict):
+                for item in obj.values():
+                    walk(item)
+        walk(payload)
+    except Exception:
+        # Be tolerant of endpoint formatting changes; recover ISO timestamps
+        # directly from the response body.
+        values.extend(re.findall(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?", raw))
+
+    times = []
+    seen = set()
+    for value in values:
+        # Some JSON values contain surrounding descriptive text.
+        matches = re.findall(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?", value)
+        if not matches and isinstance(value, str):
+            matches = [value]
+        for token in matches:
+            dt = _parse_iso_utc(token)
+            if dt is not None and dt not in seen:
+                seen.add(dt)
+                times.append(dt)
+
+    times.sort()
+    if not times:
+        raise RuntimeError(f"No NDFD issuance times returned for MinT valid {valid_text}")
+    return times
+
+
+def nearest_ndfd_issue(valid_day, target_dt, issuance_times=None):
+    """Pick the NDFD reference time closest to a requested forecast lead.
+
+    Prefer an issuance at or before the target so the verification never uses
+    information that was not yet available at that lead. If none exist, use
+    the earliest available issuance.
+    """
+    times = issuance_times if issuance_times is not None else ndfd_issuance_times(valid_day)
+    prior = [dt for dt in times if dt <= target_dt]
+    if prior:
+        return min(prior, key=lambda dt: abs((dt - target_dt).total_seconds()))
+    return min(times, key=lambda dt: abs((dt - target_dt).total_seconds()))
 
 
 def ndfd_archive_keys(issue_dt):
@@ -541,6 +625,12 @@ def main():
 
         nbm_by_lead = {}
         ndfd_by_lead = {}
+        try:
+            ndfd_issue_list = ndfd_issuance_times(valid_day)
+        except Exception as exc:
+            ndfd_issue_list = []
+            errors.append(f"{valid_day} NDFD issuance-time lookup failed: {exc}")
+
         for lead in lead_hours:
             init_dt = valid_dt - timedelta(hours=lead)
             try:
@@ -548,7 +638,9 @@ def main():
             except Exception as exc:
                 errors.append(f"{valid_day} NBM F{lead:03d}: {exc}")
             try:
-                ndfd_by_lead[lead] = read_ndfd_archive(init_dt, valid_day)
+                issue_dt = nearest_ndfd_issue(valid_day, init_dt, ndfd_issue_list) if ndfd_issue_list else init_dt
+                grids = read_ndfd_archive(issue_dt, valid_day)
+                ndfd_by_lead[lead] = (grids, issue_dt)
             except Exception as exc:
                 errors.append(f"{valid_day} NDFD F{lead:03d}: {exc}")
 
@@ -584,11 +676,13 @@ def main():
             for lead in lead_hours:
                 lead_row = {}
 
-                ndfd_grids = ndfd_by_lead.get(lead)
-                if ndfd_grids is not None:
+                ndfd_item = ndfd_by_lead.get(lead)
+                if ndfd_item is not None:
                     try:
+                        ndfd_grids, ndfd_issue_dt = ndfd_item
                         ndfd = sample_grib_collection(ndfd_grids, points)
                         lead_row["NDFD"] = metrics(ndfd, obs)
+                        lead_row["NDFDIssueUtc"] = ndfd_issue_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     except Exception as exc:
                         lead_row["NDFD"] = None
                         errors.append(f"{valid_day} {wfo} NDFD F{lead:03d}: sampling failed ({exc})")
@@ -661,11 +755,11 @@ def main():
             "defaultLeadHours": 24,
             "leadLabel": "24 h before verifying 12Z MinT",
             "sampleMode": "land",
-            "method": "CWA land-only sample nodes; archived NDFD and NBM guidance at 12/24/36/48/60-hour lead is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
+            "method": "CWA land-only sample nodes; NDFD uses the NOAA-published issuance/reference time at or immediately before each 12/24/36/48/60-hour target lead, while NBM uses its corresponding model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
         }
 
     payload = {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nbmVersion": "NBM v5.1",
         "element": "MinT",
@@ -674,7 +768,7 @@ def main():
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
         "spatialModes": ["land"],
-        "method": "Rolling CWA land MAE and mean bias versus RTMA. Archived NDFD plus NBM deterministic and percentiles retain 12/24/36/48/60-hour lead-time verification.",
+        "method": "Rolling CWA land MAE and mean bias versus RTMA. NDFD history is keyed to NOAA reference/issuance times nearest but not later than each requested lead; NBM deterministic and percentiles use the corresponding archived model cycles.",
         "cwas": cwas,
         "errors": errors[-60:],
     }
@@ -691,7 +785,7 @@ def main():
         raise RuntimeError("Lead-time verification schema incomplete: " + "; ".join(missing_leads))
 
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-    print(f"Wrote {OUTPUT} (schemaVersion=2; archived NBM lead cycles preserved)")
+    print(f"Wrote {OUTPUT} (schemaVersion=3; archived NDFD issuance history + NBM lead cycles preserved)")
     for w in WFO_IDS:
         print(w, len(cwas[w]["dates"]), cwas[w]["byLead"].get("24", {}).get("ranking", [])[:3])
     if errors:
