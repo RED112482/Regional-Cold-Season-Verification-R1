@@ -456,9 +456,8 @@ async function renderVerification(){
   const data=state.verificationData,root=data&&data.cwas?data.cwas[state.verifyCwa]:null;
   const trendBtn=document.getElementById('verifyTrendView'),nightBtn=document.getElementById('verifyNightView'),dateCtl=document.getElementById('verifyDateControl');
   const sliderCtl=document.getElementById('verifyLeadSlider'),hasLeadArchive=!!(data&&data._hasLeadArchive);
-  if(sliderCtl)sliderCtl.disabled=!root||!hasLeadArchive;
-  if(nightBtn)nightBtn.disabled=!root||!hasLeadArchive;
-  if(!hasLeadArchive&&state.verifyMode==='night')state.verifyMode='trend';
+  if(sliderCtl)sliderCtl.disabled=!root;
+  if(nightBtn)nightBtn.disabled=!root;
   trendBtn?.classList.toggle('active',state.verifyMode==='trend');nightBtn?.classList.toggle('active',state.verifyMode==='night');
   if(dateCtl)dateCtl.style.display=state.verifyMode==='night'?'block':'none';
 
@@ -483,7 +482,7 @@ async function renderVerification(){
     dateSelect.innerHTML=dates.map((d,i)=>'<option value="'+i+'" '+(i===state.verifyDateIndex?'selected':'')+'>'+esc(formatDayLabel(d))+'</option>').join('');
   }
 
-  const selectedLead=(root.byLead||{})[String(state.verifyLeadHours)]||{dailyMae:root.dailyMae||{},dailyBias:root.dailyBias||{},ranking:root.ranking||[]},
+  const selectedLead=(root.byLead||{})[String(state.verifyLeadHours)]||(state.verifyLeadHours===24?{dailyMae:root.dailyMae||{},dailyBias:root.dailyBias||{},ranking:root.ranking||[]}:{dailyMae:{},dailyBias:{},ranking:[]}),
         ranking=(selectedLead.ranking||[]).slice().sort((a,b)=>(a.mae??999)-(b.mae??999)),
         pct=ranking.find(x=>/^P\d+/.test(x.source)),
         ndfd24=((root.byLead||{})['24']?.ranking||root.ranking||[]).find(x=>x.source==='NDFD'),
@@ -497,7 +496,7 @@ async function renderVerification(){
   document.getElementById('verifyBest').textContent=pct?pct.source:'—';
   document.getElementById('verifyBestMae').textContent=pct&&isNum(num(pct.mae))?num(pct.mae).toFixed(2)+'°F':'—';
   document.getElementById('verifyNdfdMae').textContent=ndfd24&&isNum(num(ndfd24.mae))?num(ndfd24.mae).toFixed(2)+'°F':'—';
-  document.getElementById('verifyUpdated').textContent=(!hasLeadArchive?'Showing existing 24-hour verification while archived F12/F24/F36/F48/F60 data rebuilds · ':'Last '+dates.length+' completed nights · ')+ 'Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
+  document.getElementById('verifyUpdated').textContent=(!hasLeadArchive?'Archived lead-time build in progress · controls remain available · ':'Last '+dates.length+' completed nights · ')+ 'Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
 
   function perfColor(mae,alpha=1){
     if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(40,209,124,'+alpha+')';
@@ -510,7 +509,7 @@ async function renderVerification(){
   if(state.verifyMode==='trend'){
     chartLabels=dates.map(formatShortDate);chartMae=selectedLead.dailyMae||{};chartBias=selectedLead.dailyBias||{};
     title='5-Day MAE vs RTMA · '+state.verifyLeadHours+' hr Lead';
-    note='Each point is one verifying night at the selected forecast lead. Move the slider to compare F12/F24/F36/F48/F60.';
+    note=(!hasLeadArchive&&state.verifyLeadHours!==24)?('Archived F'+state.verifyLeadHours+' data have not been published yet. The control is working; this lead will populate when the historical NBM cycle build completes.'):'Each point is one verifying night at the selected forecast lead. Move the slider to compare F12/F24/F36/F48/F60.';
     document.getElementById('verifyRankingTitle').textContent='5-Day Ranking · '+state.verifyLeadHours+' hr';
   }else{
     const ix=state.verifyDateIndex,night=dates[ix]||'';
