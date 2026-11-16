@@ -7,7 +7,6 @@ on:
       - "site/index.html"
       - "site/.nojekyll"
       - "site/data/forecast.json"
-      - "site/data/verification.json"
       - "site/data/cwop_recent.json"
       - "site/data/cwop_daily.json"
       - "site/data/cwop/**"
