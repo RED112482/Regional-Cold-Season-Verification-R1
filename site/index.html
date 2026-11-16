@@ -329,12 +329,12 @@
       <div class="verify-grid">
         <div class="verify-main">
           <div class="verify-summary">
-            <div class="card"><span id="verifyBestLabel">Best percentile</span><strong id="verifyBest">—</strong></div>
+            <div class="card"><span id="verifyBestLabel">Best guidance</span><strong id="verifyBest">—</strong></div>
             <div class="card"><span id="verifyBestMaeLabel">Best MAE</span><strong id="verifyBestMae">—</strong></div>
             <div class="card"><span id="verifyNdfdMaeLabel">NDFD 24h MAE</span><strong id="verifyNdfdMae">—</strong></div>
           </div>
           <div class="verify-chart-card">
-            <div id="verifyChartTitle" class="section-title">5-Day MAE vs RTMA · 24 hr Lead</div>
+            <div id="verifyChartTitle" class="section-title">5-Day MAE vs URMA TMIN · 24 hr Lead</div>
             <div class="verify-chart-wrap"><canvas id="verificationChart"></canvas></div>
             <div id="verifyChartNote" class="verify-legend-note">Move the lead slider to see how skill changed farther from the verifying night.</div>
             <div class="verify-perf-legend"><span class="verify-perf-label">Best</span><span class="verify-perf-bar"></span><span class="verify-perf-label">Worst</span><span>Lower MAE is better</span></div>
@@ -543,9 +543,16 @@ async function renderVerification(){
 
   let chartLabels=[],chartMae={},chartBias={},displayRanking=ranking,title='',note='';
   if(state.verifyMode==='trend'){
-    chartLabels=dates.map(formatShortDate);chartMae=selectedLead.dailyMae||{};chartBias=selectedLead.dailyBias||{};
+    const rawMae=selectedLead.dailyMae||{},rawBias=selectedLead.dailyBias||{},sources=verifySourceOrder();
+    const keep=dates.map((d,i)=>sources.some(src=>isNum(num((rawMae[src]||[])[i]))));
+    chartLabels=dates.filter((d,i)=>keep[i]).map(formatShortDate);
+    chartMae={};chartBias={};
+    sources.forEach(src=>{
+      chartMae[src]=(rawMae[src]||[]).filter((v,i)=>keep[i]);
+      chartBias[src]=(rawBias[src]||[]).filter((v,i)=>keep[i]);
+    });
     title='5-Day MAE vs URMA TMIN · '+state.verifyLeadHours+' hr Lead';
-    note=(!hasLeadArchive&&state.verifyLeadHours!==24)?('Archived F'+state.verifyLeadHours+' data have not been published yet. The control is working; this lead will populate when the historical NBM cycle build completes.'):'Each point is one verifying night at the selected forecast lead. Move the slider to compare F12/F24/F36/F48/F60.';
+    note='Completed verifying nights only. Solid glowing line = NDFD; dashed line = NBM Deterministic. Move the slider to compare F12/F24/F36/F48/F60.';
     document.getElementById('verifyRankingTitle').textContent='5-Day Ranking · '+state.verifyLeadHours+' hr';
   }else{
     const ix=state.verifyDateIndex,night=dates[ix]||'';
@@ -587,14 +594,16 @@ async function renderVerification(){
   const orderedSources=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v))));
   if(orderedSources.includes('NDFD')){
     const ndfdSummary=rankMap.get('NDFD')||{},ndfdMae=num(ndfdSummary.mae),
-          ndfdGlow=perfColor(isNum(ndfdMae)?ndfdMae:(bestMae??0),.32);
-    datasets.push({label:'',data:chartMae.NDFD,_bias:chartBias.NDFD||[],tension:.25,spanGaps:true,pointRadius:0,pointHoverRadius:0,borderWidth:13,borderColor:ndfdGlow,backgroundColor:'rgba(0,0,0,0)',order:1});
+          ndfdGlow=perfColor(isNum(ndfdMae)?ndfdMae:(bestMae??0),.20);
+    // High Chart.js order draws first, so this glow stays behind every real line.
+    datasets.push({label:'',data:chartMae.NDFD,_bias:chartBias.NDFD||[],tension:.25,spanGaps:true,pointRadius:0,pointHoverRadius:0,borderWidth:11,borderColor:ndfdGlow,backgroundColor:'rgba(0,0,0,0)',order:100});
   }
   orderedSources.forEach(k=>{
     const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',
           c=perfColor(isNum(m)?m:(bestMae??0),1);
     const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?(ndfdLine?9:7):(ndfdLine?6:3.5)):(ndfdLine?7:4);
-    datasets.push({label:ndfdLine?'★ OFFICIAL NDFD':verifySourceLabel(k),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?10:6,borderWidth:ndfdLine?6.5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:ndfdLine?'rgba(255,255,255,1)':c,pointBorderColor:ndfdLine?c:'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?3.2:1.4,order:ndfdLine?0:2});
+    const nbmLine=k==='NBM Deterministic';
+    datasets.push({label:ndfdLine?'★ OFFICIAL NDFD':verifySourceLabel(k),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?10:7,borderWidth:ndfdLine?6.5:(nbmLine?4:3.2),borderDash:nbmLine?[9,5]:[],borderColor:c,backgroundColor:c,pointStyle:nbmLine?'rectRot':'circle',pointBackgroundColor:ndfdLine?'rgba(255,255,255,1)':c,pointBorderColor:ndfdLine?c:'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?3.2:1.8,order:ndfdLine?0:10});
   });
 
   const canvas=document.getElementById('verificationChart');
