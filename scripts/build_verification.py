@@ -882,7 +882,7 @@ def main():
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
         "spatialModes": spatial_modes,
-        "method": "Rolling CWA MAE and mean bias versus RTMA for land, official coastal-marine-zone, or combined samples. Historical NDFD MinT comes from timestamped NOAA WMO archive snapshots; NBM deterministic and percentiles use corresponding archived model cycles."
+        "method": "Rolling CWA MAE and mean bias versus RTMA for land, official coastal-marine-zone, or combined samples. Historical NDFD MinT comes from timestamped NOAA WMO archive snapshots; NBM deterministic and percentiles use corresponding archived model cycles.",
         "cwas": cwas,
         "errors": errors[-60:],
     }
