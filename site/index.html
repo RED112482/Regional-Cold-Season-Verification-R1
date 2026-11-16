@@ -131,6 +131,13 @@
     .verify-perf-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:9px;color:#b9cada}
     .verify-perf-bar{width:180px;height:10px;border-radius:999px;background:linear-gradient(90deg,#28d17c 0%,#9bd84a 28%,#f3df4e 52%,#ff9a38 76%,#e74343 100%);box-shadow:0 0 8px rgba(22,201,255,.25)}
     .verify-perf-label{font-weight:800;color:#e7f3ff}
+    .verify-controls{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;gap:10px;align-items:end}
+    .verify-view-toggle{display:flex;gap:5px}.verify-view-toggle .period-btn{min-width:118px}
+    .verify-lead-control{min-width:240px}.verify-lead-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:10px;color:#a9bdd0}.verify-lead-head strong{font-size:13px;color:#e8f7ff}
+    .verify-date-control{min-width:150px}.verify-date-control select{width:100%;height:34px;border-radius:7px;border:1px solid #3d5b77;background:#091724;color:#dcecf8;font-family:Poppins;font-size:10px;padding:0 8px}
+    .verify-scope{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:10px;color:#c7d7e6}.verify-scope input{accent-color:var(--ice)}
+    .verify-scope-note{font-size:8px;color:#8299ad;margin-top:3px}
+    @media(max-width:800px){.verify-controls{grid-template-columns:1fr}.verify-date-control{min-width:0}}
     @media(max-width:950px){.verify-grid{grid-template-columns:1fr}.verify-summary{grid-template-columns:1fr 1fr}}
   </style>
 </head>
@@ -287,32 +294,55 @@
   <section id="verificationPage" class="page verify-page">
     <div class="verify-shell">
       <div class="verify-head">
-        <div class="section" style="min-width:330px"><div class="section-title">Forecast Office · Land Only</div><div id="verifyCwaChips" class="verify-cwas"></div></div>
-        <div class="section" style="flex:1;min-width:300px"><div class="section-title">Rolling Verification</div><div id="verifyUpdated" class="forecast-updated">Loading 5-day verification…</div><div class="small">MinT · 12Z-issued forecast valid the following 12Z · verifying analysis: RTMA</div></div>
+        <div class="section" style="min-width:330px">
+          <div class="section-title">Forecast Office</div>
+          <div id="verifyCwaChips" class="verify-cwas"></div>
+          <label class="verify-scope"><input id="verifyLandOnly" type="checkbox" checked> Land only</label>
+          <div id="verifyScopeNote" class="verify-scope-note">County/land sample only; marine areas omitted.</div>
+        </div>
+        <div class="section" style="flex:1;min-width:420px">
+          <div class="section-title">NBM MinT Lead-Time Verification</div>
+          <div class="verify-controls">
+            <div class="verify-view-toggle">
+              <button id="verifyTrendView" class="period-btn active">5-DAY TREND</button>
+              <button id="verifyNightView" class="period-btn">ONE NIGHT</button>
+            </div>
+            <div class="verify-lead-control">
+              <div class="verify-lead-head"><span>Forecast lead</span><strong id="verifyLeadValue">24 hr</strong></div>
+              <input id="verifyLeadSlider" type="range" min="12" max="60" step="12" value="24">
+            </div>
+            <div id="verifyDateControl" class="verify-date-control" style="display:none">
+              <div class="verify-lead-head"><span>Verifying night</span></div>
+              <select id="verifyDateSelect"></select>
+            </div>
+          </div>
+          <div id="verifyUpdated" class="forecast-updated" style="margin-top:8px">Loading lead-time verification…</div>
+          <div class="small">MinT verified with RTMA · NBM F12/F24/F36/F48/F60 · NDFD shown at 24 hr reference</div>
+        </div>
       </div>
       <div class="verify-grid">
         <div class="verify-main">
           <div class="verify-summary">
-            <div class="card"><span>Best 5-day percentile</span><strong id="verifyBest">—</strong></div>
-            <div class="card"><span>Best 5-day MAE</span><strong id="verifyBestMae">—</strong></div>
-            <div class="card"><span>NDFD 5-day MAE</span><strong id="verifyNdfdMae">—</strong></div>
+            <div class="card"><span id="verifyBestLabel">Best percentile</span><strong id="verifyBest">—</strong></div>
+            <div class="card"><span id="verifyBestMaeLabel">Best MAE</span><strong id="verifyBestMae">—</strong></div>
+            <div class="card"><span id="verifyNdfdMaeLabel">NDFD 24h MAE</span><strong id="verifyNdfdMae">—</strong></div>
           </div>
           <div class="verify-chart-card">
-            <div class="section-title">CWA Land MAE vs RTMA · Lower is Better</div>
+            <div id="verifyChartTitle" class="section-title">5-Day MAE vs RTMA · 24 hr Lead</div>
             <div class="verify-chart-wrap"><canvas id="verificationChart"></canvas></div>
-            <div id="verifyChartNote" class="verify-legend-note">Actual daily MAE is plotted. Line color reflects rolling performance; NDFD is emphasized with a glow.</div>
-            <div class="verify-perf-legend"><span class="verify-perf-label">Best</span><span class="verify-perf-bar"></span><span class="verify-perf-label">Worst</span><span>Green = lowest rolling MAE · Red = highest rolling MAE</span></div>
+            <div id="verifyChartNote" class="verify-legend-note">Move the lead slider to see how skill changed farther from the verifying night.</div>
+            <div class="verify-perf-legend"><span class="verify-perf-label">Best</span><span class="verify-perf-bar"></span><span class="verify-perf-label">Worst</span><span>Lower MAE is better</span></div>
           </div>
         </div>
         <div class="verify-side">
-          <div class="section"><div class="section-title">5-Day Ranking</div><div id="verifyRanking" class="verify-rank"><div class="small">Loading verification…</div></div></div>
-          <div class="section"><div class="section-title">Bias Trend</div><div id="verifyBias" class="guidance-list"></div></div>
-          <div class="section verify-method"><div class="section-title">Method</div>
-            <b>Metric:</b> mean absolute error (MAE) in °F, with signed mean bias shown separately.<br>
-            <b>Spatial sample:</b> CWA land only; every source is sampled at the same verification points.<br>
-            <b>Forecast timing:</b> 12Z cycle / NDFD snapshot, verifying the following 12Z MinT period.<br>
-            <b>NBM percentiles:</b> P10, P25, P50, P75, P90. Lowest 5-day MAE is labeled best.<br>
-            <b>Important:</b> five days is a short rolling diagnostic, not a climatological calibration.
+          <div class="section"><div id="verifyRankingTitle" class="section-title">5-Day Ranking · 24 hr</div><div id="verifyRanking" class="verify-rank"><div class="small">Loading verification…</div></div></div>
+          <div class="section"><div class="section-title">Bias</div><div id="verifyBias" class="guidance-list"></div></div>
+          <div class="section verify-method"><div class="section-title">How to Read It</div>
+            <b>5-Day Trend:</b> choose a lead time and compare the last five verifying nights.<br>
+            <b>One Night:</b> choose one verifying date and watch the forecast evolve from 60 hr to 12 hr lead.<br>
+            <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus RTMA.<br>
+            <b>Spatial sample:</b> land-only county sample. Marine areas are omitted in the current verification archive.<br>
+            <b>NDFD:</b> shown as a 24-hour operational reference only.
           </div>
         </div>
       </div>
@@ -347,7 +377,7 @@
 <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
-const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
+const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',verifyMode:'trend',verifyLeadHours:24,verifyDateIndex:4,verifyLandOnly:true,forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
 const PRODUCT_STYLE={
  'Frost Advisory':{color:'#6495ed'},'Freeze Watch':{color:'#00ffff'},'Freeze Warning':{color:'#483d8b'},'Cold Weather Advisory':{color:'#afeeee'},'Extreme Cold Watch':{color:'#5f9ea0'},'Extreme Cold Warning':{color:'#0000ff'},'Legacy Wind Chill':{color:'#8a6cff'},'Legacy Hard Freeze':{color:'#5540a5'}
 };
@@ -373,7 +403,12 @@ state.productsMap.createPane('verificationPane');state.productsMap.getPane('veri
 state.freqLabelLayer=L.layerGroup().addTo(state.frequencyMap);state.freqStationLayer=L.layerGroup().addTo(state.frequencyMap);state.verificationLayer=L.layerGroup().addTo(state.productsMap);state.forecastLabelLayer=L.layerGroup().addTo(state.forecastMap);state.forecastContourLayer=L.layerGroup().addTo(state.forecastMap);addFrequencyLegend();addProductLegend();addForecastTempLegend();addFrostLegend();}
 function wire(){document.getElementById('loadBtn').addEventListener('click',loadSeason);document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));document.querySelectorAll('.preset').forEach(btn=>btn.addEventListener('click',()=>{state.selectedMode=btn.dataset.mode;document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x===btn));renderFrequency()}));document.getElementById('thresholdSlider').addEventListener('input',e=>{state.threshold=Number(e.target.value);document.getElementById('thresholdValue').textContent=state.threshold+'°F';state.selectedMode='custom';document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x.dataset.mode==='custom'));renderFrequency()});document.getElementById('showCounts').addEventListener('change',renderFrequency);document.getElementById('showStations').addEventListener('change',renderFrequency);document.getElementById('freqExcludeAdd').addEventListener('click',addFrequencyExclusion);document.getElementById('freqExcludeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addFrequencyExclusion()}});document.getElementById('freqExcludeClear').addEventListener('click',clearFrequencyExclusions);document.getElementById('seasonSelect').addEventListener('change',loadSeason);document.getElementById('stationMode').addEventListener('change',loadSeason);document.getElementById('timelineSlider').addEventListener('input',e=>{state.timelineIndex=Number(e.target.value);updateTimelineDate();renderFrequency()});document.getElementById('timelinePrev').addEventListener('click',()=>stepTimeline(-1));document.getElementById('timelineNext').addEventListener('click',()=>stepTimeline(1));document.getElementById('timelinePlay').addEventListener('click',toggleTimelinePlay);document.querySelectorAll('[data-forecast-period]').forEach(btn=>btn.addEventListener('click',()=>setForecastPeriod(btn.dataset.forecastPeriod)));document.querySelectorAll('[data-frost-period]').forEach(btn=>btn.addEventListener('click',()=>setFrostPeriod(btn.dataset.frostPeriod)));document.getElementById('showForecastMint').addEventListener('change',e=>{state.forecastShowMint=e.target.checked;if(e.target.checked){state.forecastShowApt=false;document.getElementById('showForecastApt').checked=false}renderForecast()});document.getElementById('showForecastApt').addEventListener('change',e=>{state.forecastShowApt=e.target.checked;if(e.target.checked){state.forecastShowMint=false;document.getElementById('showForecastMint').checked=false}renderForecast()});document.getElementById('showForecastCounties').addEventListener('change',e=>{state.forecastShowCounties=e.target.checked;renderForecast()});document.getElementById('forecastCoverageSlider').addEventListener('input',e=>{state.forecastCoverageThreshold=Number(e.target.value);document.getElementById('forecastCoverageValue').textContent=state.forecastCoverageThreshold+'%';renderForecast();});const scheduleVerificationReload=()=>{clearTimeout(state.verificationReloadTimer);state.verificationReloadTimer=setTimeout(()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)},180)};['showCoopSupplement','showRwisSupplement','showUscrnSupplement','showDcpSupplement','showCwopSupplement'].forEach(id=>document.getElementById(id).addEventListener('change',scheduleVerificationReload));
 document.getElementById('showVerificationLabels').addEventListener('change',()=>{if(state.selectedEvent)renderEventPointResults(state.selectedEvent,state.eventPointResults||[])});
-document.getElementById('showVerificationDuration').addEventListener('change',()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)});document.getElementById('freqCountView').addEventListener('click',()=>setFrequencyMetric('count'));document.getElementById('freqSinceView').addEventListener('click',()=>setFrequencyMetric('since'));}
+document.getElementById('showVerificationDuration').addEventListener('change',()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)});document.getElementById('freqCountView').addEventListener('click',()=>setFrequencyMetric('count'));document.getElementById('freqSinceView').addEventListener('click',()=>setFrequencyMetric('since'));
+document.getElementById('verifyTrendView').addEventListener('click',()=>{state.verifyMode='trend';renderVerification()});
+document.getElementById('verifyNightView').addEventListener('click',()=>{state.verifyMode='night';renderVerification()});
+document.getElementById('verifyLeadSlider').addEventListener('input',e=>{state.verifyLeadHours=Number(e.target.value);document.getElementById('verifyLeadValue').textContent=state.verifyLeadHours+' hr';renderVerification()});
+document.getElementById('verifyDateSelect').addEventListener('change',e=>{state.verifyDateIndex=Number(e.target.value);renderVerification()});
+document.getElementById('verifyLandOnly').addEventListener('change',e=>{state.verifyLandOnly=e.target.checked;if(!state.verifyLandOnly){state.verifyLandOnly=true;e.target.checked=true;document.getElementById('verifyScopeNote').textContent='Marine verification is not yet stored; retaining land-only sample.'}else document.getElementById('verifyScopeNote').textContent='County/land sample only; marine areas omitted.';renderVerification()});}
 function switchTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(tab+'Page').classList.add('active');setTimeout(()=>{if(tab==='frequency')state.frequencyMap.invalidateSize();if(tab==='products')state.productsMap.invalidateSize();if(tab==='forecast'){state.forecastMap.invalidateSize();renderForecast()}if(tab==='frost'){state.frostMap.invalidateSize();renderFrost()}if(tab==='verification')renderVerification()},80)}
 function buildCwaChips(){const el=document.getElementById('freqCwaChips');el.innerHTML=['ALL'].concat(state.config.wfos).map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.cwaFilter=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.frequencyMap,state.cwaFilter);renderFrequency()}));}
 function buildProductCwaChips(){const el=document.getElementById('productCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',async()=>{state.productCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.productsMap,state.productCwa);await loadLiveEvents(state.productCwa,Number(document.getElementById('seasonSelect').value),state.fallbackHazards)}));}
@@ -414,140 +449,112 @@ function ensureVerificationChartLibrary(){
   return verificationChartLoadPromise;
 }
 function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
-async function loadVerificationData(){try{const r=await fetch('./data/verification.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);state.verificationData=await r.json();renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset not available yet';const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>'}}
+async function loadVerificationData(){try{const r=await fetch('./data/verification.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);state.verificationData=await r.json();const root=state.verificationData&&state.verificationData.cwas?state.verificationData.cwas[state.verifyCwa]:null;if(root){state.verifyLeadHours=Number(root.defaultLeadHours||state.verificationData.defaultLeadHours||24);state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset not available yet';const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>'}}
 function verifySourceOrder(){return['NDFD','NBM Deterministic','P10','P25','P50','P75','P90']}
 function verifySourceLabel(k){return k==='NBM Deterministic'?'NBM Det':k}
 async function renderVerification(){
   const data=state.verificationData,root=data&&data.cwas?data.cwas[state.verifyCwa]:null;
+  const trendBtn=document.getElementById('verifyTrendView'),nightBtn=document.getElementById('verifyNightView'),dateCtl=document.getElementById('verifyDateControl');
+  trendBtn?.classList.toggle('active',state.verifyMode==='trend');nightBtn?.classList.toggle('active',state.verifyMode==='night');
+  if(dateCtl)dateCtl.style.display=state.verifyMode==='night'?'block':'none';
+
   if(!root){
     document.getElementById('verifyUpdated').textContent=data&&data.status?data.status:'Verification data unavailable for '+state.verifyCwa;
-    document.getElementById('verifyBest').textContent='—';
-    document.getElementById('verifyBestMae').textContent='—';
-    document.getElementById('verifyNdfdMae').textContent='—';
+    ['verifyBest','verifyBestMae','verifyNdfdMae'].forEach(id=>document.getElementById(id).textContent='—');
     document.getElementById('verifyRanking').innerHTML='<div class="small">No verification data are available yet.</div>';
     document.getElementById('verifyBias').innerHTML='';
     if(state.verificationChart){state.verificationChart.destroy();state.verificationChart=null}
     return;
   }
 
-  const ranking=(root.ranking||[]).slice().sort((a,b)=>(a.mae??999)-(b.mae??999)),
+  const dates=root.dates||[],leads=(root.leadHours||data.leadHours||[12,24,36,48,60]).map(Number);
+  if(!leads.includes(state.verifyLeadHours))state.verifyLeadHours=Number(root.defaultLeadHours||data.defaultLeadHours||24);
+  const slider=document.getElementById('verifyLeadSlider'),leadValue=document.getElementById('verifyLeadValue');
+  if(slider){slider.min=Math.min(...leads);slider.max=Math.max(...leads);slider.step=12;slider.value=state.verifyLeadHours}
+  if(leadValue)leadValue.textContent=state.verifyLeadHours+' hr';
+
+  const dateSelect=document.getElementById('verifyDateSelect');
+  if(dateSelect){
+    state.verifyDateIndex=Math.max(0,Math.min(dates.length-1,state.verifyDateIndex));
+    dateSelect.innerHTML=dates.map((d,i)=>'<option value="'+i+'" '+(i===state.verifyDateIndex?'selected':'')+'>'+esc(formatDayLabel(d))+'</option>').join('');
+  }
+
+  const selectedLead=(root.byLead||{})[String(state.verifyLeadHours)]||{dailyMae:root.dailyMae||{},dailyBias:root.dailyBias||{},ranking:root.ranking||[]},
+        ranking=(selectedLead.ranking||[]).slice().sort((a,b)=>(a.mae??999)-(b.mae??999)),
         pct=ranking.find(x=>/^P\d+/.test(x.source)),
-        ndfd=ranking.find(x=>x.source==='NDFD'),
+        ndfd24=((root.byLead||{})['24']?.ranking||root.ranking||[]).find(x=>x.source==='NDFD'),
         validMae=ranking.map(r=>num(r.mae)).filter(isNum),
         bestMae=validMae.length?Math.min(...validMae):null,
         worstMae=validMae.length?Math.max(...validMae):null;
 
+  document.getElementById('verifyBestLabel').textContent=state.verifyMode==='trend'?'Best percentile · '+state.verifyLeadHours+'h':'Best percentile · selected night';
+  document.getElementById('verifyBestMaeLabel').textContent=state.verifyMode==='trend'?'Best 5-night MAE':'Best selected-night MAE';
+  document.getElementById('verifyNdfdMaeLabel').textContent='NDFD 24h MAE';
   document.getElementById('verifyBest').textContent=pct?pct.source:'—';
   document.getElementById('verifyBestMae').textContent=pct&&isNum(num(pct.mae))?num(pct.mae).toFixed(2)+'°F':'—';
-  document.getElementById('verifyNdfdMae').textContent=ndfd&&isNum(num(ndfd.mae))?num(ndfd.mae).toFixed(2)+'°F':'—';
-  document.getElementById('verifyUpdated').textContent='Last '+(root.dates||[]).length+' completed nights · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
+  document.getElementById('verifyNdfdMae').textContent=ndfd24&&isNum(num(ndfd24.mae))?num(ndfd24.mae).toFixed(2)+'°F':'—';
+  document.getElementById('verifyUpdated').textContent='Last '+dates.length+' completed nights · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
 
   function perfColor(mae,alpha=1){
     if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(40,209,124,'+alpha+')';
-    const t=Math.max(0,Math.min(1,(mae-bestMae)/(worstMae-bestMae)));
-    const stops=[
-      [0.00,[40,209,124]],
-      [0.28,[155,216,74]],
-      [0.52,[243,223,78]],
-      [0.76,[255,154,56]],
-      [1.00,[231,67,67]]
-    ];
-    for(let i=0;i<stops.length-1;i++){
-      const a=stops[i],b=stops[i+1];
-      if(t>=a[0]&&t<=b[0]){
-        const q=(t-a[0])/(b[0]-a[0]);
-        const r=Math.round(a[1][0]+(b[1][0]-a[1][0])*q);
-        const g=Math.round(a[1][1]+(b[1][1]-a[1][1])*q);
-        const bl=Math.round(a[1][2]+(b[1][2]-a[1][2])*q);
-        return 'rgba('+r+','+g+','+bl+','+alpha+')';
-      }
-    }
-    return 'rgba(231,47,47,'+alpha+')';
+    const t=Math.max(0,Math.min(1,(mae-bestMae)/(worstMae-bestMae))),stops=[[0,[40,209,124]],[.28,[155,216,74]],[.52,[243,223,78]],[.76,[255,154,56]],[1,[231,67,67]]];
+    for(let i=0;i<stops.length-1;i++){const a=stops[i],b=stops[i+1];if(t>=a[0]&&t<=b[0]){const q=(t-a[0])/(b[0]-a[0]);return'rgba('+Math.round(a[1][0]+(b[1][0]-a[1][0])*q)+','+Math.round(a[1][1]+(b[1][1]-a[1][1])*q)+','+Math.round(a[1][2]+(b[1][2]-a[1][2])*q)+','+alpha+')'}}
+    return'rgba(231,67,67,'+alpha+')';
   }
 
-  document.getElementById('verifyRanking').innerHTML=ranking.map((r,i)=>{
-    const c=perfColor(num(r.mae),1),nd=r.source==='NDFD';
-    const perf=i===0?'BEST':i===ranking.length-1?'WORST':'#'+(i+1);return '<div class="verify-rank-row" style="border-color:'+c+';box-shadow:'+(nd?'0 0 14px rgba(85,190,255,.75)':'0 0 6px '+c.replace('1)', '.25)'))+'"><div class="verify-rank-num" style="color:'+c+'">'+perf+'</div><div><div class="verify-rank-name">'+esc(verifySourceLabel(r.source))+(nd?' · NDFD':'')+'</div><div class="verify-rank-sub">Bias '+(isNum(num(r.bias))?(num(r.bias)>=0?'+':'')+num(r.bias).toFixed(2)+'°F':'—')+' · '+(r.samples||0)+' samples</div></div><div class="verify-rank-val" style="color:'+c+'">'+(isNum(num(r.mae))?num(r.mae).toFixed(2)+'°':'—')+'</div></div>';
+  let chartLabels=[],chartMae={},chartBias={},displayRanking=ranking,title='',note='';
+  if(state.verifyMode==='trend'){
+    chartLabels=dates.map(formatShortDate);chartMae=selectedLead.dailyMae||{};chartBias=selectedLead.dailyBias||{};
+    title='5-Day MAE vs RTMA · '+state.verifyLeadHours+' hr Lead';
+    note='Each point is one verifying night at the selected forecast lead. Move the slider to compare F12/F24/F36/F48/F60.';
+    document.getElementById('verifyRankingTitle').textContent='5-Day Ranking · '+state.verifyLeadHours+' hr';
+  }else{
+    const ix=state.verifyDateIndex,night=dates[ix]||'';
+    chartLabels=leads.slice().sort((a,b)=>b-a).map(h=>h+'h');
+    const sources=verifySourceOrder().filter(x=>x!=='NDFD');
+    chartMae={};chartBias={};
+    sources.forEach(src=>{
+      chartMae[src]=leads.slice().sort((a,b)=>b-a).map(h=>num((((root.byLead||{})[String(h)]||{}).dailyMae||{})[src]?.[ix]));
+      chartBias[src]=leads.slice().sort((a,b)=>b-a).map(h=>num((((root.byLead||{})[String(h)]||{}).dailyBias||{})[src]?.[ix]));
+    });
+    const nightRows=sources.map(src=>{
+      const vals=leads.map(h=>num((((root.byLead||{})[String(h)]||{}).dailyMae||{})[src]?.[ix])).filter(isNum);
+      const bs=leads.map(h=>num((((root.byLead||{})[String(h)]||{}).dailyBias||{})[src]?.[ix])).filter(isNum);
+      return vals.length?{source:src,mae:vals[vals.length-1],bias:bs.length?bs[bs.length-1]:null,samples:0}:null;
+    }).filter(Boolean).sort((a,b)=>a.mae-b.mae);
+    displayRanking=nightRows;
+    title='Forecast Evolution · '+formatDayLabel(night);
+    note='Left to right: 60h → 12h before verification. Downward lines mean the forecast improved as the night approached.';
+    document.getElementById('verifyRankingTitle').textContent='Selected Night · F12 Ranking';
+    const bestNight=nightRows.find(x=>/^P\d+/.test(x.source));
+    document.getElementById('verifyBest').textContent=bestNight?bestNight.source:'—';
+    document.getElementById('verifyBestMae').textContent=bestNight&&isNum(num(bestNight.mae))?num(bestNight.mae).toFixed(2)+'°F':'—';
+  }
+
+  document.getElementById('verifyChartTitle').textContent=title;
+  document.getElementById('verifyChartNote').textContent=note;
+
+  const rankMae=displayRanking.map(r=>num(r.mae)).filter(isNum),rankBest=rankMae.length?Math.min(...rankMae):null,rankWorst=rankMae.length?Math.max(...rankMae):null;
+  document.getElementById('verifyRanking').innerHTML=displayRanking.map((r,i)=>{
+    const c=(rankBest===null||rankWorst===null||rankBest===rankWorst)?'rgba(40,209,124,1)':perfColor(num(r.mae),1);
+    const perf=i===0?'BEST':i===displayRanking.length-1?'WORST':'#'+(i+1);
+    return'<div class="verify-rank-row" style="border-color:'+c+'"><div class="verify-rank-num" style="color:'+c+'">'+perf+'</div><div><div class="verify-rank-name">'+esc(verifySourceLabel(r.source))+'</div><div class="verify-rank-sub">Bias '+(isNum(num(r.bias))?(num(r.bias)>=0?'+':'')+num(r.bias).toFixed(2)+'°F':'—')+(r.samples?' · '+r.samples+' samples':'')+'</div></div><div class="verify-rank-val" style="color:'+c+'">'+(isNum(num(r.mae))?num(r.mae).toFixed(2)+'°':'—')+'</div></div>';
   }).join('');
 
-  document.getElementById('verifyBias').innerHTML=ranking.map(r=>'<div class="guidance-row"><div class="topline"><span>'+esc(verifySourceLabel(r.source))+'</span><span>'+((num(r.bias)>=0?'+':'')+fmt(num(r.bias))+'°F')+'</span></div><div class="subline">Rolling mean signed error · positive = too warm</div></div>').join('');
+  document.getElementById('verifyBias').innerHTML=displayRanking.map(r=>'<div class="guidance-row"><div class="topline"><span>'+esc(verifySourceLabel(r.source))+'</span><span>'+(isNum(num(r.bias))?((num(r.bias)>=0?'+':'')+fmt(num(r.bias))+'°F'):'—')+'</span></div><div class="subline">Positive = forecast too warm · negative = too cold</div></div>').join('');
 
-  const labels=(root.dates||[]).map(d=>formatShortDate(d)),
-        order=verifySourceOrder(),
-        mae=root.dailyMae||{},
-        rankMap=new Map(ranking.map(r=>[r.source,r]));
-
-  const datasets=order.filter(k=>Array.isArray(mae[k])).map(k=>{
-    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',c=perfColor(m,1);
-    return{
-      label:verifySourceLabel(k)+(ndfdLine?' ★':''),
-      data:mae[k],
-      _bias:(root.dailyBias||{})[k]||[],
-      tension:.25,
-      spanGaps:true,
-      pointRadius:ndfdLine?5.5:4,
-      pointHoverRadius:ndfdLine?8:6,
-      borderWidth:ndfdLine?5:3.2,
-      borderColor:c,
-      backgroundColor:c,
-      pointBackgroundColor:c,
-      pointBorderColor:ndfdLine?'rgba(220,250,255,1)':'rgba(10,20,30,.85)',
-      pointBorderWidth:ndfdLine?2.4:1.4
-    };
+  const order=verifySourceOrder(),rankMap=new Map(displayRanking.map(r=>[r.source,r]));
+  const datasets=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v)))).map(k=>{
+    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',c=perfColor(isNum(m)?m:(bestMae??0),1);
+    return{label:verifySourceLabel(k)+(ndfdLine?' ★':''),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:ndfdLine?5.5:4,pointHoverRadius:ndfdLine?8:6,borderWidth:ndfdLine?5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:c,pointBorderColor:ndfdLine?'rgba(220,250,255,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?2.4:1.4};
   });
-
-  const ndfdGlowPlugin={
-    id:'ndfdGlow',
-    beforeDatasetDraw(chart,args){
-      const ds=chart.data.datasets[args.index];
-      if(!ds||!String(ds.label).startsWith('NDFD'))return;
-      const ctx=chart.ctx;
-      ctx.save();
-      ctx.shadowColor='rgba(70,190,255,.95)';
-      ctx.shadowBlur=14;
-      ctx.shadowOffsetX=0;
-      ctx.shadowOffsetY=0;
-    },
-    afterDatasetDraw(chart,args){
-      const ds=chart.data.datasets[args.index];
-      if(ds&&String(ds.label).startsWith('NDFD'))chart.ctx.restore();
-    }
-  };
 
   const canvas=document.getElementById('verificationChart');
   if(state.verificationChart)state.verificationChart.destroy();
   const chartReady=await ensureVerificationChartLibrary();
   if(chartReady&&window.Chart&&canvas){
-    state.verificationChart=new Chart(canvas,{
-      type:'line',
-      data:{labels,datasets},
-      plugins:[ndfdGlowPlugin],
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        interaction:{mode:'index',intersect:false},
-        plugins:{
-          legend:{labels:{color:'#dbe9f5',boxWidth:12,font:{family:'Poppins',size:10}}},
-          tooltip:{callbacks:{
-            label:c=>{
-              const bias=c.dataset._bias&&c.dataset._bias[c.dataIndex]!=null?Number(c.dataset._bias[c.dataIndex]):null;
-              return c.dataset.label.replace(' ★','')+': MAE '+(c.parsed.y==null?'—':c.parsed.y.toFixed(2)+'°F')+(isNum(bias)?' · Bias '+(bias>=0?'+':'')+bias.toFixed(2)+'°F':'');
-            }
-          }}
-        },
-        scales:{
-          x:{ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.12)'}},
-          y:{
-            beginAtZero:true,
-            title:{display:true,text:'Mean Absolute Error (°F)',color:'#cbdbe9',font:{family:'Poppins',size:10}},
-            ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},
-            grid:{color:'rgba(120,150,180,.16)'}
-          }
-        }
-      }
-    });
+    state.verificationChart=new Chart(canvas,{type:'line',data:{labels:chartLabels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#dbe9f5',boxWidth:12,font:{family:'Poppins',size:10}}},tooltip:{callbacks:{label:c=>{const bias=c.dataset._bias&&c.dataset._bias[c.dataIndex]!=null?Number(c.dataset._bias[c.dataIndex]):null;return c.dataset.label.replace(' ★','')+': MAE '+(c.parsed.y==null?'—':c.parsed.y.toFixed(2)+'°F')+(isNum(bias)?' · Bias '+(bias>=0?'+':'')+bias.toFixed(2)+'°F':'')}}}},scales:{x:{ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.12)'}},y:{beginAtZero:true,title:{display:true,text:'Mean Absolute Error (°F)',color:'#cbdbe9',font:{family:'Poppins',size:10}},ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.16)'}}}}});
   }
-  document.getElementById('verifyChartNote').textContent='Actual MAE is plotted. Green = best rolling performance, red = worst. NDFD keeps an additional glow/outline so it remains easy to track. '+(root.leadLabel||'');
 }
 
 function strictFrequencyCountyForPoint(data,lon,lat){
