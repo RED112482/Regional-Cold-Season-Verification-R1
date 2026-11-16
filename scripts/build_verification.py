@@ -665,6 +665,7 @@ def main():
         }
 
     payload = {
+        "schemaVersion": 2,
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nbmVersion": "NBM v5.1",
         "element": "MinT",
@@ -677,8 +678,20 @@ def main():
         "cwas": cwas,
         "errors": errors[-60:],
     }
+    # Do not publish a dataset that silently collapses all leads back to the
+    # legacy 24-hour series.  The viewer's lead slider and One Night mode
+    # require a populated byLead block for every CWA.
+    missing_leads = []
+    for wfo, block in cwas.items():
+        present = set((block.get("byLead") or {}).keys())
+        required = {str(h) for h in lead_hours}
+        if not required.issubset(present):
+            missing_leads.append(f"{wfo}: missing {sorted(required - present)}")
+    if missing_leads:
+        raise RuntimeError("Lead-time verification schema incomplete: " + "; ".join(missing_leads))
+
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-    print(f"Wrote {OUTPUT}")
+    print(f"Wrote {OUTPUT} (schemaVersion=2; archived NBM lead cycles preserved)")
     for w in WFO_IDS:
         print(w, len(cwas[w]["dates"]), cwas[w]["byLead"].get("24", {}).get("ranking", [])[:3])
     if errors:
