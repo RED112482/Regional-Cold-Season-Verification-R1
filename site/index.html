@@ -346,7 +346,7 @@
           <div class="section verify-method"><div class="section-title">How to Read It</div>
             <b>5-Day Trend:</b> choose a lead time and compare the last five verifying nights.<br>
             <b>One Night:</b> choose one verifying date and watch the forecast evolve from 60 hr to 12 hr lead.<br>
-            <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus RTMA.<br>
+            <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus RTMA. Forecast MinT is required to be valid at 12Z; RTMA verification uses the minimum hourly 2-m temperature from 00Z–12Z.<br>
             <b>Spatial sample:</b> switch between land, official NWS coastal marine zones, or both. Inland offices may not have a marine option.<br>
             <b>NDFD:</b> archived lead-time verification is shown at the same 12/24/36/48/60-hour leads as NBM.<br>
             <b>Important:</b> the lines show each source's MAE versus RTMA; distance between the NDFD and NBM lines is <i>not</i> the direct NDFD-minus-NBM forecast difference.
@@ -583,13 +583,15 @@ async function renderVerification(){
   const datasets=[];
   const orderedSources=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v))));
   if(orderedSources.includes('NDFD')){
-    datasets.push({label:'',data:chartMae.NDFD,_bias:chartBias.NDFD||[],tension:.25,spanGaps:true,pointRadius:0,pointHoverRadius:0,borderWidth:11,borderColor:'rgba(0,0,0,.82)',backgroundColor:'rgba(0,0,0,0)',order:1});
+    const ndfdSummary=rankMap.get('NDFD')||{},ndfdMae=num(ndfdSummary.mae),
+          ndfdGlow=perfColor(isNum(ndfdMae)?ndfdMae:(bestMae??0),.32);
+    datasets.push({label:'',data:chartMae.NDFD,_bias:chartBias.NDFD||[],tension:.25,spanGaps:true,pointRadius:0,pointHoverRadius:0,borderWidth:13,borderColor:ndfdGlow,backgroundColor:'rgba(0,0,0,0)',order:1});
   }
   orderedSources.forEach(k=>{
     const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',
-          c=ndfdLine?'rgba(74,232,255,1)':perfColor(isNum(m)?m:(bestMae??0),1);
+          c=perfColor(isNum(m)?m:(bestMae??0),1);
     const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?(ndfdLine?9:7):(ndfdLine?6:3.5)):(ndfdLine?7:4);
-    datasets.push({label:ndfdLine?'★ OFFICIAL NDFD':verifySourceLabel(k),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?10:6,borderWidth:ndfdLine?6.5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:ndfdLine?'rgba(255,255,255,1)':c,pointBorderColor:ndfdLine?'rgba(0,170,210,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?3:1.4,order:ndfdLine?0:2});
+    datasets.push({label:ndfdLine?'★ OFFICIAL NDFD':verifySourceLabel(k),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?10:6,borderWidth:ndfdLine?6.5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:ndfdLine?'rgba(255,255,255,1)':c,pointBorderColor:ndfdLine?c:'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?3.2:1.4,order:ndfdLine?0:2});
   });
 
   const canvas=document.getElementById('verificationChart');
