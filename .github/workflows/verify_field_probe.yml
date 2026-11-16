@@ -14,51 +14,65 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install boto3
+      - run: pip install boto3 eccodes eccodeslib numpy
       - name: Probe fields
         run: |
           python - <<'PY'
-          import boto3, json
+          import boto3, tempfile, os
+          import numpy as np
+          from pathlib import Path
           from botocore import UNSIGNED
           from botocore.client import Config
+          from eccodes import codes_grib_new_from_file,codes_get,codes_release
           s3=boto3.client("s3",config=Config(signature_version=UNSIGNED))
 
-          print("=== URMA keys 2026-11-15 ===")
+          def get_idx(bucket,key):
+              return s3.get_object(Bucket=bucket,Key=key+".idx")["Body"].read().decode("utf-8","replace").splitlines()
+
+          def range_for(lines, i, size):
+              start=int(lines[i].split(":")[1])
+              end=(int(lines[i+1].split(":")[1])-1) if i+1<len(lines) else size-1
+              return start,end
+
+          print("=== URMA TMIN ===")
           b="noaa-urma-pds"
-          for pref in ("urma2p5.20261115/","urma2p5.20261116/"):
-              r=s3.list_objects_v2(Bucket=b,Prefix=pref,MaxKeys=200)
-              for o in r.get("Contents",[]):
-                  k=o["Key"]
-                  if "t20z" in k or "mint" in k.lower():
-                      print(k)
+          k="urma2p5.20261115/urma2p5.t20z.2dvaranl_ndfd.grb2_wexp"
+          lines=get_idx(b,k)
+          for i,line in enumerate(lines):
+              if ":TMIN:" not in line:
+                  continue
+              print("IDX",line)
+              size=s3.head_object(Bucket=b,Key=k)["ContentLength"]
+              a,z=range_for(lines,i,size)
+              body=s3.get_object(Bucket=b,Key=k,Range=f"bytes={a}-{z}")["Body"].read()
+              fd,path=tempfile.mkstemp(suffix=".grb2");os.close(fd);Path(path).write_bytes(body)
+              try:
+                  with open(path,"rb") as fh:
+                      gid=codes_grib_new_from_file(fh)
+                      print("META", {name:(codes_get(gid,name) if gid is not None else None) for name in ["shortName","name","stepType","dataDate","dataTime","validityDate","validityTime","forecastTime","startStep","endStep","stepRange"]})
+                      if gid is not None: codes_release(gid)
+              finally:
+                  os.unlink(path)
 
-          print("\n=== URMA candidate indexes ===")
-          r=s3.list_objects_v2(Bucket=b,Prefix="urma2p5.20261115/",MaxKeys=500)
-          keys=[o["Key"] for o in r.get("Contents",[]) if "t20z" in o["Key"] and ("2dvaranl" in o["Key"] or "mint" in o["Key"].lower())]
-          for k in keys[:12]:
-              print("\nKEY",k)
-              for ik in (k+".idx", k.replace(".grb2_wexp",".grb2_wexp.idx"), k.replace(".grb2",".grb2.idx")):
-                  try:
-                      body=s3.get_object(Bucket=b,Key=ik)["Body"].read().decode("utf-8","replace")
-                      for line in body.splitlines():
-                          if any(x in line.lower() for x in ("tmp","tmin","min")):
-                              print(line)
-                      break
-                  except Exception:
-                      pass
-
-          print("\n=== NBM core F024 index 20261115 12Z ===")
+          print("\n=== NBM files under 20261115/12/grib2 ===")
           b="noaa-nbm-grib2-pds"
-          k="blend.20261115/12/grib2/blend.t12z.core.f024.co.grib2"
-          body=s3.get_object(Bucket=b,Key=k+".idx")["Body"].read().decode("utf-8","replace")
-          for line in body.splitlines():
-              if "TMP" in line.upper() or "MIN" in line.upper():
-                  print(line)
+          pref="blend.20261115/12/grib2/"
+          r=s3.list_objects_v2(Bucket=b,Prefix=pref,MaxKeys=1000)
+          keys=[o["Key"] for o in r.get("Contents",[])]
+          for k in keys:
+              if "core" in k or "qmd" in k:
+                  print(k)
 
-          print("\n=== NBM qmd F024 index 20261115 12Z ===")
-          k="blend.20261115/12/grib2/blend.t12z.qmd.f024.co.grib2"
-          body=s3.get_object(Bucket=b,Key=k+".idx")["Body"].read().decode("utf-8","replace")
-          for line in body.splitlines():
-              if "TMP" in line.upper() or "MIN" in line.upper() or "PERCENT" in line.upper():
-                  print(line)
+          print("\n=== Candidate NBM MinT indexes ===")
+          candidates=[k for k in keys if ("core" in k or "qmd" in k) and "f024" in k and not k.endswith(".idx")]
+          for k in candidates:
+              print("\nKEY",k)
+              try:
+                  lines=get_idx(b,k)
+              except Exception as e:
+                  print("NO IDX",e);continue
+              for line in lines:
+                  up=line.upper()
+                  if "TMIN" in up or ("TMP" in up and ("MIN" in up or "2 M" in up)):
+                      print(line)
           PY
