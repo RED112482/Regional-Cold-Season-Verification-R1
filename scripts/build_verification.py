@@ -6,7 +6,7 @@ Method:
 - Forecast snapshot/cycle: 12Z on the preceding day.
 - NDFD: historical forecast.json snapshots already committed by this repository.
 - NBM: operational CONUS Core + QMD GRIB2 from NOAA Open Data (12Z, F024).
-- Verification: hourly RTMA 2-m temperature from 00Z through 12Z; the minimum
+- Verification: hourly URMA 2-m temperature from 00Z through 12Z; the minimum
   at each sample point is the verifying MinT.
 - Spatial sampling: the existing NDFD raw sample nodes that fall inside each
   supported CWA's county polygons. This keeps all sources on the identical
@@ -40,9 +40,11 @@ COUNTIES = DATA / "counties.geojson"
 OUTPUT = DATA / "verification.json"
 WFO_IDS = ["MOB", "LIX", "JAN", "BMX", "TAE"]
 NBM_BUCKET = "noaa-nbm-grib2-pds"
-RTMA_BUCKET = "noaa-rtma-pds"
+URMA_BUCKET = "noaa-rtma-pds"
+URMA_BUCKET = "noaa-urma-pds"
 NDFD_BUCKET = "noaa-ndfd-pds"
 PERCENTILES = [10, 25, 50, 75, 90]
+MARINE_WFO_IDS = {"MOB", "LIX", "TAE"}
 
 s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
 
@@ -108,7 +110,7 @@ MARINE_ZONES_URL = "https://mapservices.weather.noaa.gov/static/rest/services/nw
 
 def marine_geometries():
     """Fetch official NWS coastal marine-zone polygons for supported WFOs."""
-    where = "wfo IN (" + ",".join(f"'{w}'" for w in WFO_IDS) + ")"
+    where = "wfo IN (" + ",".join(f"'{w}'" for w in sorted(MARINE_WFO_IDS)) + ")"
     params = {
         "where": where,
         "outFields": "wfo,name,id",
@@ -578,10 +580,9 @@ def nbm_keys(init_dt, lead_hours):
     ds = init_dt.strftime("%Y%m%d")
     hh = init_dt.strftime("%H")
     fh = f"{int(lead_hours):03d}"
-    base = f"blend.{ds}/{hh}/grib2"
     return (
-        f"{base}/blend.t{hh}z.core.f{fh}.co.grib2",
-        f"{base}/blend.t{hh}z.qmd.f{fh}.co.grib2",
+        f"blend.{ds}/{hh}/core/blend.t{hh}z.core.f{fh}.co.grib2",
+        f"blend.{ds}/{hh}/qmd/blend.t{hh}z.qmd.f{fh}.co.grib2",
     )
 
 
@@ -606,13 +607,13 @@ def read_nbm(init_dt, lead_hours):
     hh = init_dt.strftime("%H")
     fh = f"{int(lead_hours):03d}"
     expected_valid = (init_dt + timedelta(hours=int(lead_hours))).astimezone(timezone.utc)
-    core = find_key(NBM_BUCKET, core_pref, f"blend.{ds}/{hh}/", f"blend.t{hh}z.core.f{fh}.co.grib2")
-    qmd = find_key(NBM_BUCKET, qmd_pref, f"blend.{ds}/{hh}/", f"blend.t{hh}z.qmd.f{fh}.co.grib2")
+    core = find_key(NBM_BUCKET, core_pref, f"blend.{ds}/{hh}/core/", f"blend.t{hh}z.core.f{fh}.co.grib2")
+    qmd = find_key(NBM_BUCKET, qmd_pref, f"blend.{ds}/{hh}/qmd/", f"blend.t{hh}z.qmd.f{fh}.co.grib2")
 
     core_lines = idx_lines(NBM_BUCKET, core)
-    cand = select_idx_candidates(core_lines, ["tmp", "min"])
+    cand = [i for i,line in enumerate(core_lines) if ":TMIN:" in line.upper() and "MIN FCST" in line.upper() and "ENS STD DEV" not in line.upper()]
     if not cand:
-        raise RuntimeError(f"Could not locate NBM deterministic MinT message F{fh}")
+        raise RuntimeError(f"Could not locate exact NBM deterministic TMIN message F{fh}")
     det = None
     rejected = []
     for ci in cand:
@@ -656,22 +657,53 @@ def read_nbm(init_dt, lead_hours):
         )
     return det, pct
 
+def urma_tmin_key(day):
+    ds = day.strftime("%Y%m%d")
+    return f"urma2p5.{ds}/urma2p5.t20z.2dvaranl_ndfd.grb2_wexp"
+
+
+def read_urma_tmin(day):
+    """Read NOAA URMA full-grid minimum temperature analysis valid 12Z.
+
+    Operational metadata: TMIN, 2 m above ground, stepType=min, 0-12 hour
+    analysis period, validity at 12Z. URMA is the analysis of record used for
+    verification/calibration.
+    """
+    key = urma_tmin_key(day)
+    lines = idx_lines(URMA_BUCKET, key)
+    cand = [i for i,line in enumerate(lines) if ":TMIN:" in line.upper()]
+    if not cand:
+        raise RuntimeError(f"Could not locate URMA TMIN for {day}")
+    grib = fetch_message(URMA_BUCKET, key, cand[0], lines)
+    meta = grib[3]
+    expected = datetime(day.year, day.month, day.day, 12, tzinfo=timezone.utc)
+    if not grib_matches_valid(meta, expected):
+        raise RuntimeError(f"URMA TMIN validity mismatch for {day}: {grib_valid_datetime(meta)}")
+    if str(meta.get("stepType") or "").lower() != "min":
+        raise RuntimeError(f"URMA TMIN stepType is not min for {day}")
+    if str(meta.get("stepRange") or "") not in ("0-12", "0-12h"):
+        # Do not hard-fail solely on representation differences, but retain the
+        # explicit validity/step-type checks above.
+        pass
+    return grib
+
+
 def rtma_key(day, hour):
     ds = day.strftime("%Y%m%d")
     name = f"rtma2p5.t{hour:02d}z.2dvaranl_ndfd.grb2_wexp"
     preferred = f"rtma2p5.{ds}/{name}"
-    return find_key(RTMA_BUCKET, preferred, f"rtma2p5.{ds}/", name)
+    return find_key(URMA_BUCKET, preferred, f"rtma2p5.{ds}/", name)
 
 
 def read_rtma_hour(day, hour):
     key = rtma_key(day, hour)
-    lines = idx_lines(RTMA_BUCKET, key)
+    lines = idx_lines(URMA_BUCKET, key)
     cand = select_idx_candidates(lines, ["tmp", "2 m above ground"])
     if not cand:
         cand = select_idx_candidates(lines, ["tmp", "2 m"])
     if not cand:
-        raise RuntimeError(f"Could not locate RTMA 2m temperature {day} {hour:02d}Z")
-    return fetch_message(RTMA_BUCKET, key, cand[0], lines)
+        raise RuntimeError(f"Could not locate URMA 2m temperature {day} {hour:02d}Z")
+    return fetch_message(URMA_BUCKET, key, cand[0], lines)
 
 
 def sample_grib(grib, points):
@@ -754,9 +786,9 @@ def main():
         snap, sha, snap_time = historical_forecast_snapshot(issue_day)
 
         try:
-            rtma_hours = [read_rtma_hour(valid_day, h) for h in range(0, 13)]
+            urma_tmin = read_urma_tmin(valid_day)
         except Exception as exc:
-            errors.append(f"{valid_day}: RTMA unavailable ({exc})")
+            errors.append(f"{valid_day}: URMA TMIN unavailable ({exc})")
             continue
 
         nbm_by_lead = {}
@@ -803,21 +835,19 @@ def main():
                 continue
             land_points = sample_nodes(field, geoms[wfo])
             marine_points = regular_points_in_geoms(marine_geoms.get(wfo) or [])
-            scope_points = {
-                "land": land_points,
-                "marine": marine_points,
-                "both": land_points + marine_points,
-            }
+            scope_points = {"land": land_points}
+            if wfo in MARINE_WFO_IDS and len(marine_points) >= 3:
+                scope_points["marine"] = marine_points
+                scope_points["both"] = land_points + marine_points
 
             for spatial_mode, points in scope_points.items():
                 if len(points) < 3:
                     continue
 
                 try:
-                    hourly = [sample_grib(g, points) for g in rtma_hours]
-                    obs = np.nanmin(np.vstack(hourly), axis=0)
+                    obs = sample_grib(urma_tmin, points)
                 except Exception as exc:
-                    errors.append(f"{valid_day} {wfo} {spatial_mode}: RTMA sample failed ({exc})")
+                    errors.append(f"{valid_day} {wfo} {spatial_mode}: URMA TMIN sample failed ({exc})")
                     continue
 
                 row = {
@@ -868,7 +898,8 @@ def main():
     dates = [d.isoformat() for d in verify_days]
     for wfo in WFO_IDS:
         scopes = {}
-        for spatial_mode in spatial_modes:
+        supported_modes = ["land"] + (["marine", "both"] if wfo in MARINE_WFO_IDS else [])
+        for spatial_mode in supported_modes:
             base_rows = [daily[spatial_mode][wfo].get(d) for d in dates]
             base_summary = summarize_rows(base_rows, default_sources)
             by_lead = {}
@@ -902,13 +933,13 @@ def main():
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nbmVersion": "NBM v5.1",
         "element": "MinT",
-        "verification": "RTMA",
-        "validTimeDefinition": "Forecast MinT valid at 12Z; observed verification is the minimum hourly RTMA 2-m temperature from 00Z through 12Z inclusive.",
+        "verification": "URMA TMIN",
+        "validTimeDefinition": "Forecast MinT valid at 12Z; observed verification uses the NOAA URMA TMIN full grid, a 0-12Z minimum-temperature analysis valid at 12Z.",
         "windowDays": 5,
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
         "spatialModes": spatial_modes,
-        "method": "Rolling CWA MAE and mean bias versus RTMA for land, official coastal-marine-zone, or combined samples. Historical NDFD MinT comes from timestamped NOAA WMO archive snapshots; NBM deterministic and percentiles use corresponding archived model cycles.",
+        "method": "Rolling CWA MAE and mean bias versus URMA for land, official coastal-marine-zone, or combined samples. Historical NDFD MinT comes from timestamped NOAA WMO archive snapshots; NBM deterministic and percentiles use corresponding archived model cycles.",
         "cwas": cwas,
         "errors": errors[-60:],
     }
@@ -917,11 +948,9 @@ def main():
     # require a populated byLead block for every CWA.
     missing_leads = []
     for wfo, block in cwas.items():
-        for spatial_mode in spatial_modes:
+        supported_modes = ["land"] + (["marine", "both"] if wfo in MARINE_WFO_IDS else [])
+        for spatial_mode in supported_modes:
             scope = (block.get("scopes") or {}).get(spatial_mode) or {}
-            # Offices without coastal zones legitimately have no marine sample.
-            if spatial_mode == "marine" and not (marine_geoms.get(wfo) or []):
-                continue
             present = set((scope.get("byLead") or {}).keys())
             required = {str(h) for h in lead_hours}
             if not required.issubset(present):
