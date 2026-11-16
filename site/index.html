@@ -158,7 +158,6 @@
     <button class="tab" data-tab="products">Season Products</button>
     <button class="tab" data-tab="forecast">Forecast Products</button>
     <button class="tab" data-tab="frost">PoT Frost Visualizer</button>
-    <button class="tab" data-tab="verification">NBM Verification Trends</button>
   </nav>
 
   <section id="frequencyPage" class="page map-page active">
@@ -178,7 +177,7 @@
       <div class="section"><div class="section-title">County Filter</div><div id="freqCwaChips" class="chips"></div><label class="toggle"><input id="showCounts" type="checkbox" checked> Show numeric county counts</label><label class="toggle"><input id="showStations" type="checkbox"> Show representative stations</label></div>
       <div class="section">
         <div class="section-title">Observation Exclusions</div>
-        <div class="small">Remove a bad station from Frequency calculations. Exclusions are saved on this browser until restored or cleared.</div>
+        <div class="small">Remove a bad station from Frequency calculations. Exclusions are saved on this browser until restored or cleared. County daily minima are recalculated immediately from the remaining in-county stations.</div>
         <div style="display:flex;gap:6px;margin-top:8px">
           <input id="freqExcludeInput" type="text" placeholder="Station ID (e.g. NLOF1)" autocomplete="off" style="min-width:0;flex:1;background:#111d28;border:1px solid #41566b;color:#e8f2fa;border-radius:6px;padding:7px 8px;font-family:Poppins,sans-serif">
           <button id="freqExcludeAdd" class="chip" type="button">EXCLUDE</button>
@@ -292,70 +291,6 @@
     <div class="map-wrap"><div id="frostMap" class="map"></div></div>
   </section>
 
-  <section id="verificationPage" class="page verify-page">
-    <div class="verify-shell">
-      <div class="verify-head">
-        <div class="section" style="min-width:330px">
-          <div class="section-title">Forecast Office</div>
-          <div id="verifyCwaChips" class="verify-cwas"></div>
-          <div class="section-title" style="margin-top:8px">Verification Area</div>
-          <div id="verifyScopeButtons" class="verify-view-toggle">
-            <button class="period-btn active" data-verify-scope="land">LAND</button>
-            <button class="period-btn" data-verify-scope="marine">MARINE</button>
-            <button class="period-btn" data-verify-scope="both">BOTH</button>
-          </div>
-          <div id="verifyScopeNote" class="verify-scope-note">Land sample selected.</div>
-        </div>
-        <div class="section" style="flex:1;min-width:420px">
-          <div class="section-title">NBM MinT Lead-Time Verification</div>
-          <div class="verify-controls">
-            <div class="verify-view-toggle">
-              <button id="verifyTrendView" class="period-btn active">5-DAY TREND</button>
-              <button id="verifyNightView" class="period-btn">ONE NIGHT</button>
-            </div>
-            <div class="verify-lead-control">
-              <div class="verify-lead-head"><span>Forecast lead</span><strong id="verifyLeadValue">24 hr</strong></div>
-              <input id="verifyLeadSlider" type="range" min="12" max="60" step="12" value="24">
-            </div>
-            <div id="verifyDateControl" class="verify-date-control" style="display:none">
-              <div class="verify-lead-head"><span>Verifying night</span></div>
-              <select id="verifyDateSelect"></select>
-            </div>
-          </div>
-          <div id="verifyUpdated" class="forecast-updated" style="margin-top:8px">Loading lead-time verification…</div>
-          <div class="small">MinT verified with URMA TMIN · NDFD + NBM Det F12/F24/F36/F48/F60</div>
-        </div>
-      </div>
-      <div class="verify-grid">
-        <div class="verify-main">
-          <div class="verify-summary">
-            <div class="card"><span id="verifyBestLabel">Best guidance</span><strong id="verifyBest">—</strong></div>
-            <div class="card"><span id="verifyBestMaeLabel">Best MAE</span><strong id="verifyBestMae">—</strong></div>
-            <div class="card"><span id="verifyNdfdMaeLabel">NDFD 24h MAE</span><strong id="verifyNdfdMae">—</strong></div>
-          </div>
-          <div class="verify-chart-card">
-            <div id="verifyChartTitle" class="section-title">5-Day MAE vs URMA TMIN · 24 hr Lead</div>
-            <div class="verify-chart-wrap"><canvas id="verificationChart"></canvas></div>
-            <div id="verifyChartNote" class="verify-legend-note">Move the lead slider to see how skill changed farther from the verifying night.</div>
-            <div class="verify-perf-legend"><span class="verify-perf-label">Best</span><span class="verify-perf-bar"></span><span class="verify-perf-label">Worst</span><span>Lower MAE is better</span></div>
-          </div>
-        </div>
-        <div class="verify-side">
-          <div class="section"><div id="verifyRankingTitle" class="section-title">5-Day Ranking · 24 hr</div><div id="verifyRanking" class="verify-rank"><div class="small">Loading verification…</div></div></div>
-          <div class="section"><div class="section-title">Bias</div><div id="verifyBias" class="guidance-list"></div></div>
-          <div class="section verify-method"><div class="section-title">How to Read It</div>
-            <b>5-Day Trend:</b> choose a lead time and compare the last five verifying nights.<br>
-            <b>One Night:</b> choose one verifying date and watch the forecast evolve from 60 hr to 12 hr lead.<br>
-            <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus URMA TMIN. URMA provides the full 0–12Z minimum-temperature analysis valid at 12Z.<br>
-            <b>Spatial sample:</b> switch between land, official NWS coastal marine zones, or both. Inland offices may not have a marine option.<br>
-            <b>NDFD:</b> archived lead-time verification is shown at the same 12/24/36/48/60-hour leads as NBM Deterministic.<br>
-            <b>NBM percentiles:</b> temporarily withheld from this exact-period chart because the operational QMD MinT percentile product uses an 18-hour minimum window, not the 0–12Z URMA TMIN window.<br>
-            <b>Important:</b> the lines show each source's MAE versus URMA TMIN; distance between NDFD and NBM is not the direct forecast-to-forecast difference.
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
 
   </div>
 <div class="info-dock">
@@ -385,7 +320,7 @@
 <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
-const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',verifyMode:'trend',verifyLeadHours:24,verifyDateIndex:4,verifySpatialMode:'land',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
+const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',verifyMode:'trend',verifyLeadHours:24,verifyDateIndex:4,verifySpatialMode:'land',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,freqBaseCache:null,freqHitCache:null,freqRenderRaf:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
 const PRODUCT_STYLE={
  'Frost Advisory':{color:'#6495ed'},'Freeze Watch':{color:'#00ffff'},'Freeze Warning':{color:'#483d8b'},'Cold Weather Advisory':{color:'#afeeee'},'Extreme Cold Watch':{color:'#5f9ea0'},'Extreme Cold Warning':{color:'#0000ff'},'Legacy Wind Chill':{color:'#8a6cff'},'Legacy Hard Freeze':{color:'#5540a5'}
 };
@@ -402,27 +337,18 @@ async function initialize(){
     const status=document.getElementById('status1');if(status){status.textContent='Could not load GitHub Pages configuration: '+err(e);status.classList.add('show','error')}
   }
 }
-async function setup(config){if(!config||config.buildId!=='REGIONAL-COLD-SEASON-GITHUB-R14-ETN-VERIFY'){const badge=document.getElementById('buildBadge');if(badge)badge.textContent='BUILD MISMATCH';return}state.config=config;state.cwaFilter='MOB';state.productCwa='MOB';loadFrequencyExclusions();document.getElementById('appTitle').textContent=config.appTitle;document.getElementById('buildBadge').textContent=config.buildId;document.getElementById('seasonSelect').innerHTML=(config.seasonOptions||[]).map(o=>'<option value="'+o.value+'">'+esc(o.label)+'</option>').join('');document.getElementById('seasonSelect').value=String(config.defaultSeasonStartYear);document.getElementById('stationMode').value=config.defaultStationMode;const leafletReady=await waitForLeaflet(0);if(!leafletReady){const badge=document.getElementById('buildBadge');if(badge)badge.textContent=config.buildId+' · MAP LIBRARY ERROR';const status=document.getElementById('status1');if(status){status.textContent='Leaflet map library could not load. Non-map tabs may still be used after reload.';status.classList.add('show','error')}return}createMaps();wire();wireInfoDock();buildCwaChips();buildProductCwaChips();buildForecastCwaChips();buildFrostCwaChips();buildVerifyCwaChips();buildForecastProductFilters();buildProductFilters();loadStationCatalog();loadForecastData();loadVerificationData();const b=document.getElementById('loadBtn');b.disabled=false;b.textContent='LOAD SEASON';setStatus('frequency','Viewer ready. Loading the current cold season…',false,1800);setTimeout(loadSeason,120);}
+async function setup(config){if(!config||config.buildId!=='REGIONAL-COLD-SEASON-GITHUB-R14-ETN-VERIFY'){const badge=document.getElementById('buildBadge');if(badge)badge.textContent='BUILD MISMATCH';return}state.config=config;state.cwaFilter='MOB';state.productCwa='MOB';loadFrequencyExclusions();document.getElementById('appTitle').textContent=config.appTitle;document.getElementById('buildBadge').textContent=config.buildId;document.getElementById('seasonSelect').innerHTML=(config.seasonOptions||[]).map(o=>'<option value="'+o.value+'">'+esc(o.label)+'</option>').join('');document.getElementById('seasonSelect').value=String(config.defaultSeasonStartYear);document.getElementById('stationMode').value=config.defaultStationMode;const leafletReady=await waitForLeaflet(0);if(!leafletReady){const badge=document.getElementById('buildBadge');if(badge)badge.textContent=config.buildId+' · MAP LIBRARY ERROR';const status=document.getElementById('status1');if(status){status.textContent='Leaflet map library could not load. Non-map tabs may still be used after reload.';status.classList.add('show','error')}return}createMaps();wire();wireInfoDock();buildCwaChips();buildProductCwaChips();buildForecastCwaChips();buildFrostCwaChips();buildForecastProductFilters();buildProductFilters();loadStationCatalog();loadForecastData();const b=document.getElementById('loadBtn');b.disabled=false;b.textContent='LOAD SEASON';setStatus('frequency','Viewer ready. Loading the current cold season…',false,1800);setTimeout(loadSeason,120);}
 async function loadStationCatalog(){try{const r=await fetch('./data/stations.json',{cache:'no-store'});if(r.ok){const p=await r.json();state.stationCatalog=p}}catch(e){console.warn('Station catalog unavailable',e)}}
 function wireInfoDock(){const tabs=[...document.querySelectorAll('.info-tab')],panel=document.getElementById('infoPanel'),contents=[...document.querySelectorAll('.info-content')];tabs.forEach(btn=>btn.addEventListener('click',()=>{const key=btn.dataset.info,was=btn.classList.contains('active');tabs.forEach(x=>x.classList.remove('active'));contents.forEach(x=>x.classList.remove('active'));if(was){panel.classList.remove('open');return}btn.classList.add('active');const content=document.querySelector('[data-info-content="'+key+'"]');if(content)content.classList.add('active');panel.classList.add('open')}))}
 function createMaps(){state.frequencyMap=L.map('frequencyMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);state.productsMap=L.map('productsMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);state.forecastMap=L.map('forecastMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);state.frostMap=L.map('frostMap',{preferCanvas:true}).setView(state.config.center,state.config.zoom);[state.frequencyMap,state.productsMap,state.forecastMap,state.frostMap].forEach(map=>{L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,className:'gray-road-tiles',attribution:'&copy; OpenStreetMap contributors'}).addTo(map)});
 state.productsMap.createPane('hazardPane');state.productsMap.getPane('hazardPane').style.zIndex=410;
 state.productsMap.createPane('verificationPane');state.productsMap.getPane('verificationPane').style.zIndex=650;state.productsMap.getPane('verificationPane').style.pointerEvents='auto';
 state.freqLabelLayer=L.layerGroup().addTo(state.frequencyMap);state.freqStationLayer=L.layerGroup().addTo(state.frequencyMap);state.verificationLayer=L.layerGroup().addTo(state.productsMap);state.forecastLabelLayer=L.layerGroup().addTo(state.forecastMap);state.forecastContourLayer=L.layerGroup().addTo(state.forecastMap);addFrequencyLegend();addProductLegend();addForecastTempLegend();addFrostLegend();}
-function wire(){document.getElementById('loadBtn').addEventListener('click',loadSeason);document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));document.querySelectorAll('.preset').forEach(btn=>btn.addEventListener('click',()=>{state.selectedMode=btn.dataset.mode;document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x===btn));renderFrequency()}));document.getElementById('thresholdSlider').addEventListener('input',e=>{state.threshold=Number(e.target.value);document.getElementById('thresholdValue').textContent=state.threshold+'°F';state.selectedMode='custom';document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x.dataset.mode==='custom'));renderFrequency()});document.getElementById('showCounts').addEventListener('change',renderFrequency);document.getElementById('showStations').addEventListener('change',renderFrequency);document.getElementById('freqExcludeAdd').addEventListener('click',addFrequencyExclusion);document.getElementById('freqExcludeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addFrequencyExclusion()}});document.getElementById('freqExcludeClear').addEventListener('click',clearFrequencyExclusions);document.getElementById('seasonSelect').addEventListener('change',loadSeason);document.getElementById('stationMode').addEventListener('change',loadSeason);document.getElementById('timelineSlider').addEventListener('input',e=>{state.timelineIndex=Number(e.target.value);updateTimelineDate();renderFrequency()});document.getElementById('timelinePrev').addEventListener('click',()=>stepTimeline(-1));document.getElementById('timelineNext').addEventListener('click',()=>stepTimeline(1));document.getElementById('timelinePlay').addEventListener('click',toggleTimelinePlay);document.querySelectorAll('[data-forecast-period]').forEach(btn=>btn.addEventListener('click',()=>setForecastPeriod(btn.dataset.forecastPeriod)));document.querySelectorAll('[data-frost-period]').forEach(btn=>btn.addEventListener('click',()=>setFrostPeriod(btn.dataset.frostPeriod)));document.getElementById('showForecastMint').addEventListener('change',e=>{state.forecastShowMint=e.target.checked;if(e.target.checked){state.forecastShowApt=false;document.getElementById('showForecastApt').checked=false}renderForecast()});document.getElementById('showForecastApt').addEventListener('change',e=>{state.forecastShowApt=e.target.checked;if(e.target.checked){state.forecastShowMint=false;document.getElementById('showForecastMint').checked=false}renderForecast()});document.getElementById('showForecastCounties').addEventListener('change',e=>{state.forecastShowCounties=e.target.checked;renderForecast()});document.getElementById('forecastCoverageSlider').addEventListener('input',e=>{state.forecastCoverageThreshold=Number(e.target.value);document.getElementById('forecastCoverageValue').textContent=state.forecastCoverageThreshold+'%';renderForecast();});const scheduleVerificationReload=()=>{clearTimeout(state.verificationReloadTimer);state.verificationReloadTimer=setTimeout(()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)},180)};['showCoopSupplement','showRwisSupplement','showUscrnSupplement','showDcpSupplement','showCwopSupplement'].forEach(id=>document.getElementById(id).addEventListener('change',scheduleVerificationReload));
+function wire(){document.getElementById('loadBtn').addEventListener('click',loadSeason);document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));document.querySelectorAll('.preset').forEach(btn=>btn.addEventListener('click',()=>{state.selectedMode=btn.dataset.mode;document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x===btn));renderFrequency()}));document.getElementById('thresholdSlider').addEventListener('input',e=>{state.threshold=Number(e.target.value);document.getElementById('thresholdValue').textContent=state.threshold+'°F';state.selectedMode='custom';document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x.dataset.mode==='custom'));scheduleFrequencyRender()});document.getElementById('showCounts').addEventListener('change',renderFrequency);document.getElementById('showStations').addEventListener('change',renderFrequency);document.getElementById('freqExcludeAdd').addEventListener('click',addFrequencyExclusion);document.getElementById('freqExcludeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addFrequencyExclusion()}});document.getElementById('freqExcludeClear').addEventListener('click',clearFrequencyExclusions);document.getElementById('seasonSelect').addEventListener('change',loadSeason);document.getElementById('stationMode').addEventListener('change',loadSeason);document.getElementById('timelineSlider').addEventListener('input',e=>{state.timelineIndex=Number(e.target.value);updateTimelineDate();scheduleFrequencyRender()});document.getElementById('timelinePrev').addEventListener('click',()=>stepTimeline(-1));document.getElementById('timelineNext').addEventListener('click',()=>stepTimeline(1));document.getElementById('timelinePlay').addEventListener('click',toggleTimelinePlay);document.querySelectorAll('[data-forecast-period]').forEach(btn=>btn.addEventListener('click',()=>setForecastPeriod(btn.dataset.forecastPeriod)));document.querySelectorAll('[data-frost-period]').forEach(btn=>btn.addEventListener('click',()=>setFrostPeriod(btn.dataset.frostPeriod)));document.getElementById('showForecastMint').addEventListener('change',e=>{state.forecastShowMint=e.target.checked;if(e.target.checked){state.forecastShowApt=false;document.getElementById('showForecastApt').checked=false}renderForecast()});document.getElementById('showForecastApt').addEventListener('change',e=>{state.forecastShowApt=e.target.checked;if(e.target.checked){state.forecastShowMint=false;document.getElementById('showForecastMint').checked=false}renderForecast()});document.getElementById('showForecastCounties').addEventListener('change',e=>{state.forecastShowCounties=e.target.checked;renderForecast()});document.getElementById('forecastCoverageSlider').addEventListener('input',e=>{state.forecastCoverageThreshold=Number(e.target.value);document.getElementById('forecastCoverageValue').textContent=state.forecastCoverageThreshold+'%';renderForecast();});const scheduleVerificationReload=()=>{clearTimeout(state.verificationReloadTimer);state.verificationReloadTimer=setTimeout(()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)},180)};['showCoopSupplement','showRwisSupplement','showUscrnSupplement','showDcpSupplement','showCwopSupplement'].forEach(id=>document.getElementById(id).addEventListener('change',scheduleVerificationReload));
 document.getElementById('showVerificationLabels').addEventListener('change',()=>{if(state.selectedEvent)renderEventPointResults(state.selectedEvent,state.eventPointResults||[])});
 document.getElementById('showVerificationDuration').addEventListener('change',()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)});document.getElementById('freqCountView').addEventListener('click',()=>setFrequencyMetric('count'));document.getElementById('freqSinceView').addEventListener('click',()=>setFrequencyMetric('since'));
-document.getElementById('verifyTrendView').addEventListener('click',()=>{state.verifyMode='trend';renderVerification()});
-document.getElementById('verifyNightView').addEventListener('click',()=>{state.verifyMode='night';renderVerification()});
-document.getElementById('verifyLeadSlider').addEventListener('input',e=>{state.verifyLeadHours=Number(e.target.value);document.getElementById('verifyLeadValue').textContent=state.verifyLeadHours+' hr';renderVerification()});
-document.getElementById('verifyDateSelect').addEventListener('change',e=>{state.verifyDateIndex=Number(e.target.value);renderVerification()});
-document.querySelectorAll('#verifyScopeButtons [data-verify-scope]').forEach(btn=>btn.addEventListener('click',()=>{
-  state.verifySpatialMode=btn.dataset.verifyScope;
-  document.querySelectorAll('#verifyScopeButtons [data-verify-scope]').forEach(x=>x.classList.toggle('active',x===btn));
-  renderVerification();
-}));
 }
-function switchTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(tab+'Page').classList.add('active');setTimeout(()=>{if(tab==='frequency')state.frequencyMap.invalidateSize();if(tab==='products')state.productsMap.invalidateSize();if(tab==='forecast'){state.forecastMap.invalidateSize();renderForecast()}if(tab==='frost'){state.frostMap.invalidateSize();renderFrost()}if(tab==='verification')renderVerification()},80)}
+function switchTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(tab+'Page').classList.add('active');setTimeout(()=>{if(tab==='frequency')state.frequencyMap.invalidateSize();if(tab==='products')state.productsMap.invalidateSize();if(tab==='forecast'){state.forecastMap.invalidateSize();renderForecast()}if(tab==='frost'){state.frostMap.invalidateSize();renderFrost()}},80)}
 function buildCwaChips(){const el=document.getElementById('freqCwaChips');el.innerHTML=['ALL'].concat(state.config.wfos).map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.cwaFilter=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.frequencyMap,state.cwaFilter);renderFrequency()}));}
 function buildProductCwaChips(){const el=document.getElementById('productCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',async()=>{state.productCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.productsMap,state.productCwa);await loadLiveEvents(state.productCwa,Number(document.getElementById('seasonSelect').value),state.fallbackHazards)}));}
 function buildForecastCwaChips(){const el=document.getElementById('forecastCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.forecastCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.forecastMap,state.forecastCwa);renderForecast()}));}
@@ -446,173 +372,6 @@ function updateFrostPeriodLabels(){if(!state.forecastData)return;const slots=ava
 function setFrostPeriod(period){state.frostPeriod=period;document.querySelectorAll('[data-frost-period]').forEach(btn=>btn.classList.toggle('active',btn.dataset.frostPeriod===period));renderFrost()}
 function buildForecastProductFilters(){const el=document.getElementById('forecastProductFilters'),names=['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'];el.innerHTML=names.map(n=>'<label class="product-toggle forecast-product-filter"><input type="checkbox" data-forecast-product="'+esc(n)+'" '+(state.forecastProducts.has(n)?'checked':'')+'> '+n+'</label>').join('');el.querySelectorAll('input').forEach(box=>box.addEventListener('change',()=>{const n=box.dataset.forecastProduct;if(box.checked)state.forecastProducts.add(n);else state.forecastProducts.delete(n);renderForecast()}))}
 function buildProductFilters(){const el=document.getElementById('productFilters'),current=['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'],legacy=['Legacy Wind Chill','Legacy Hard Freeze'];const row=n=>'<label class="product-toggle"><input type="checkbox" data-product="'+esc(n)+'" '+(state.productTypes.has(n)?'checked':'')+'><span class="swatch" style="background:'+PRODUCT_STYLE[n].color+'"></span>'+esc(n)+'</label>';el.innerHTML=current.map(row).join('')+'<details class="legacy-products"><summary>Legacy Products · off by default</summary><div class="legacy-inner">'+legacy.map(row).join('')+'</div></details>';el.querySelectorAll('input').forEach(box=>box.addEventListener('change',()=>{if(box.checked)state.productTypes.add(box.dataset.product);else state.productTypes.delete(box.dataset.product);if(state.selectedEvent&&!state.productTypes.has(state.selectedEvent.type))state.selectedEvent=null;renderEventList();renderProducts()}));}
-
-let verificationChartLoadPromise=null;
-function ensureVerificationChartLibrary(){
-  if(window.Chart)return Promise.resolve(true);
-  if(verificationChartLoadPromise)return verificationChartLoadPromise;
-  verificationChartLoadPromise=new Promise(resolve=>{
-    const script=document.createElement('script');
-    script.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js';
-    script.async=true;
-    script.onload=()=>resolve(!!window.Chart);
-    script.onerror=()=>{console.warn('Chart.js unavailable; verification tab will use text summaries only.');resolve(false)};
-    document.head.appendChild(script);
-  });
-  return verificationChartLoadPromise;
-}
-function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;const cwa=state.verificationData&&state.verificationData.cwas?state.verificationData.cwas[state.verifyCwa]:null;if(cwa&&cwa.scopes&&!cwa.scopes[state.verifySpatialMode])state.verifySpatialMode='land';el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
-async function loadVerificationData(){try{const r=await fetch('./data/verification.json?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const cwa=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||cwa.scopes.land):cwa;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
-function verifySourceOrder(){return['NDFD','NBM Deterministic']}
-function verifySourceLabel(k){return k==='NBM Deterministic'?'NBM Det':k}
-async function renderVerification(){
-  const data=state.verificationData,cwa=data&&data.cwas?data.cwas[state.verifyCwa]:null;
-  let root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||null):cwa;
-  const trendBtn=document.getElementById('verifyTrendView'),nightBtn=document.getElementById('verifyNightView'),dateCtl=document.getElementById('verifyDateControl');
-  const sliderCtl=document.getElementById('verifyLeadSlider'),hasLeadArchive=!!(data&&data._hasLeadArchive);
-  const scopeButtons=[...document.querySelectorAll('#verifyScopeButtons [data-verify-scope]')];
-  const hasSpatialScopes=!!(cwa&&cwa.scopes);
-  const availableScopes=hasSpatialScopes?Object.keys(cwa.scopes):['land'];
-  if(!availableScopes.includes(state.verifySpatialMode)){
-    state.verifySpatialMode=availableScopes.includes('land')?'land':availableScopes[0];
-    root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||null):cwa;
-  }
-  scopeButtons.forEach(btn=>{
-    const ok=availableScopes.includes(btn.dataset.verifyScope);
-    btn.disabled=!ok;
-    btn.classList.toggle('active',btn.dataset.verifyScope===state.verifySpatialMode);
-  });
-  const scopeNote=document.getElementById('verifyScopeNote');
-  if(scopeNote)scopeNote.textContent=!hasSpatialScopes?'Land sample only in the currently published dataset; spatial rebuild not yet available.':
-    state.verifySpatialMode==='marine'?'Official NWS coastal marine-zone sample selected.':
-    state.verifySpatialMode==='both'?'Combined land + coastal marine-zone sample selected.':
-    'Land/county sample selected.';
-  if(sliderCtl)sliderCtl.disabled=!root;
-  if(nightBtn)nightBtn.disabled=!root;
-  trendBtn?.classList.toggle('active',state.verifyMode==='trend');nightBtn?.classList.toggle('active',state.verifyMode==='night');
-  if(dateCtl)dateCtl.style.display=state.verifyMode==='night'?'block':'none';
-
-  if(!root){
-    document.getElementById('verifyUpdated').textContent=data&&data.status?data.status:'Verification data unavailable for '+state.verifyCwa;
-    ['verifyBest','verifyBestMae','verifyNdfdMae'].forEach(id=>document.getElementById(id).textContent='—');
-    document.getElementById('verifyRanking').innerHTML='<div class="small">No verification data are available yet.</div>';
-    document.getElementById('verifyBias').innerHTML='';
-    if(state.verificationChart){state.verificationChart.destroy();state.verificationChart=null}
-    return;
-  }
-
-  const dates=root.dates||[],leads=(root.leadHours||data.leadHours||[12,24,36,48,60]).map(Number);
-  if(!leads.includes(state.verifyLeadHours))state.verifyLeadHours=Number(root.defaultLeadHours||data.defaultLeadHours||24);
-  const slider=document.getElementById('verifyLeadSlider'),leadValue=document.getElementById('verifyLeadValue');
-  if(slider){slider.min=Math.min(...leads);slider.max=Math.max(...leads);slider.step=12;slider.value=state.verifyLeadHours}
-  if(leadValue)leadValue.textContent=state.verifyLeadHours+' hr';
-
-  const dateSelect=document.getElementById('verifyDateSelect');
-  if(dateSelect){
-    state.verifyDateIndex=Math.max(0,Math.min(dates.length-1,state.verifyDateIndex));
-    dateSelect.innerHTML=dates.map((d,i)=>'<option value="'+i+'" '+(i===state.verifyDateIndex?'selected':'')+'>'+esc(formatDayLabel(d))+'</option>').join('');
-  }
-
-  const selectedLead=(root.byLead||{})[String(state.verifyLeadHours)]||(state.verifyLeadHours===24?{dailyMae:root.dailyMae||{},dailyBias:root.dailyBias||{},ranking:root.ranking||[]}:{dailyMae:{},dailyBias:{},ranking:[]}),
-        ranking=(selectedLead.ranking||[]).slice().sort((a,b)=>(a.mae??999)-(b.mae??999)),
-        pct=ranking.find(x=>x.source!=='NDFD'),
-        ndfdSelected=(selectedLead.ranking||[]).find(x=>x.source==='NDFD'),
-        validMae=ranking.map(r=>num(r.mae)).filter(isNum),
-        bestMae=validMae.length?Math.min(...validMae):null,
-        worstMae=validMae.length?Math.max(...validMae):null;
-
-  document.getElementById('verifyBestLabel').textContent=state.verifyMode==='trend'?'Best guidance · '+state.verifyLeadHours+'h':'Best guidance · selected night';
-  document.getElementById('verifyBestMaeLabel').textContent=state.verifyMode==='trend'?'Best 5-night MAE':'Best selected-night MAE';
-  document.getElementById('verifyNdfdMaeLabel').textContent='NDFD '+state.verifyLeadHours+'h MAE';
-  document.getElementById('verifyBest').textContent=pct?pct.source:'—';
-  document.getElementById('verifyBestMae').textContent=pct&&isNum(num(pct.mae))?num(pct.mae).toFixed(2)+'°F':'—';
-  document.getElementById('verifyNdfdMae').textContent=ndfdSelected&&isNum(num(ndfdSelected.mae))?num(ndfdSelected.mae).toFixed(2)+'°F':'—';
-  {
-    const ndfdLeadCount=leads.filter(h=>Array.isArray((((root.byLead||{})[String(h)]||{}).dailyMae||{}).NDFD)&&((((root.byLead||{})[String(h)]||{}).dailyMae||{}).NDFD).some(v=>isNum(num(v)))).length;
-    document.getElementById('verifyUpdated').textContent=
-      (!hasLeadArchive?'Archived lead-time build in progress · controls remain available · ':'Last '+dates.length+' completed nights · ')+
-      'NDFD '+ndfdLeadCount+'/'+leads.length+' leads loaded · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
-  }
-
-  function perfColor(mae,alpha=1){
-    if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(40,209,124,'+alpha+')';
-    const t=Math.max(0,Math.min(1,(mae-bestMae)/(worstMae-bestMae))),stops=[[0,[40,209,124]],[.28,[155,216,74]],[.52,[243,223,78]],[.76,[255,154,56]],[1,[231,67,67]]];
-    for(let i=0;i<stops.length-1;i++){const a=stops[i],b=stops[i+1];if(t>=a[0]&&t<=b[0]){const q=(t-a[0])/(b[0]-a[0]);return'rgba('+Math.round(a[1][0]+(b[1][0]-a[1][0])*q)+','+Math.round(a[1][1]+(b[1][1]-a[1][1])*q)+','+Math.round(a[1][2]+(b[1][2]-a[1][2])*q)+','+alpha+')'}}
-    return'rgba(231,67,67,'+alpha+')';
-  }
-
-  let chartLabels=[],chartMae={},chartBias={},displayRanking=ranking,title='',note='';
-  if(state.verifyMode==='trend'){
-    const rawMae=selectedLead.dailyMae||{},rawBias=selectedLead.dailyBias||{},sources=verifySourceOrder();
-    const keep=dates.map((d,i)=>sources.some(src=>isNum(num((rawMae[src]||[])[i]))));
-    chartLabels=dates.filter((d,i)=>keep[i]).map(formatShortDate);
-    chartMae={};chartBias={};
-    sources.forEach(src=>{
-      chartMae[src]=(rawMae[src]||[]).filter((v,i)=>keep[i]);
-      chartBias[src]=(rawBias[src]||[]).filter((v,i)=>keep[i]);
-    });
-    title='5-Day MAE vs URMA TMIN · '+state.verifyLeadHours+' hr Lead';
-    note='Completed verifying nights only. Solid glowing line = NDFD; dashed line = NBM Deterministic. Move the slider to compare F12/F24/F36/F48/F60.';
-    document.getElementById('verifyRankingTitle').textContent='5-Day Ranking · '+state.verifyLeadHours+' hr';
-  }else{
-    const ix=state.verifyDateIndex,night=dates[ix]||'';
-    chartLabels=leads.slice().sort((a,b)=>b-a).map(h=>h+'h');
-    const sources=verifySourceOrder();
-    chartMae={};chartBias={};
-    sources.forEach(src=>{
-      chartMae[src]=leads.slice().sort((a,b)=>b-a).map(h=>num((((root.byLead||{})[String(h)]||{}).dailyMae||{})[src]?.[ix]));
-      chartBias[src]=leads.slice().sort((a,b)=>b-a).map(h=>num((((root.byLead||{})[String(h)]||{}).dailyBias||{})[src]?.[ix]));
-    });
-    const nightRows=sources.map(src=>{
-      const mae=num((((root.byLead||{})[String(state.verifyLeadHours)]||{}).dailyMae||{})[src]?.[ix]),
-            bias=num((((root.byLead||{})[String(state.verifyLeadHours)]||{}).dailyBias||{})[src]?.[ix]);
-      return isNum(mae)?{source:src,mae,bias,samples:0}:null;
-    }).filter(Boolean).sort((a,b)=>a.mae-b.mae);
-    displayRanking=nightRows;
-    title='Forecast Evolution vs URMA TMIN · '+formatDayLabel(night);
-    note='Left to right: 60h → 12h before verification. NDFD and NBM are both taken from the archived forecast available at each lead. Downward lines mean the forecast improved as the night approached. Ranking reflects the selected '+state.verifyLeadHours+'h lead.';
-    document.getElementById('verifyRankingTitle').textContent='Selected Night · F'+state.verifyLeadHours+' Ranking';
-    const bestNight=nightRows.find(x=>x.source!=='NDFD');
-    document.getElementById('verifyBest').textContent=bestNight?bestNight.source:'—';
-    document.getElementById('verifyBestMae').textContent=bestNight&&isNum(num(bestNight.mae))?num(bestNight.mae).toFixed(2)+'°F':'—';
-  }
-
-  document.getElementById('verifyChartTitle').textContent=title;
-  document.getElementById('verifyChartNote').textContent=note;
-
-  const rankMae=displayRanking.map(r=>num(r.mae)).filter(isNum),rankBest=rankMae.length?Math.min(...rankMae):null,rankWorst=rankMae.length?Math.max(...rankMae):null;
-  document.getElementById('verifyRanking').innerHTML=displayRanking.map((r,i)=>{
-    const c=(rankBest===null||rankWorst===null||rankBest===rankWorst)?'rgba(40,209,124,1)':perfColor(num(r.mae),1);
-    const perf=i===0?'BEST':i===displayRanking.length-1?'WORST':'#'+(i+1);
-    return'<div class="verify-rank-row" style="border-color:'+c+'"><div class="verify-rank-num" style="color:'+c+'">'+perf+'</div><div><div class="verify-rank-name">'+esc(verifySourceLabel(r.source))+'</div><div class="verify-rank-sub">Bias '+(isNum(num(r.bias))?(num(r.bias)>=0?'+':'')+num(r.bias).toFixed(2)+'°F':'—')+(r.samples?' · '+r.samples+' samples':'')+'</div></div><div class="verify-rank-val" style="color:'+c+'">'+(isNum(num(r.mae))?num(r.mae).toFixed(2)+'°':'—')+'</div></div>';
-  }).join('');
-
-  document.getElementById('verifyBias').innerHTML=displayRanking.map(r=>'<div class="guidance-row"><div class="topline"><span>'+esc(verifySourceLabel(r.source))+'</span><span>'+(isNum(num(r.bias))?((num(r.bias)>=0?'+':'')+fmt(num(r.bias))+'°F'):'—')+'</span></div><div class="subline">Positive = forecast too warm · negative = too cold</div></div>').join('');
-
-  const order=verifySourceOrder(),rankMap=new Map(displayRanking.map(r=>[r.source,r]));
-  const datasets=[];
-  const orderedSources=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v))));
-  if(orderedSources.includes('NDFD')){
-    const ndfdSummary=rankMap.get('NDFD')||{},ndfdMae=num(ndfdSummary.mae),
-          ndfdGlow=perfColor(isNum(ndfdMae)?ndfdMae:(bestMae??0),.20);
-    // High Chart.js order draws first, so this glow stays behind every real line.
-    datasets.push({label:'',data:chartMae.NDFD,_bias:chartBias.NDFD||[],tension:.25,spanGaps:true,pointRadius:0,pointHoverRadius:0,borderWidth:11,borderColor:ndfdGlow,backgroundColor:'rgba(0,0,0,0)',order:100});
-  }
-  orderedSources.forEach(k=>{
-    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',
-          c=perfColor(isNum(m)?m:(bestMae??0),1);
-    const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?(ndfdLine?9:7):(ndfdLine?6:3.5)):(ndfdLine?7:4);
-    const nbmLine=k==='NBM Deterministic';
-    datasets.push({label:ndfdLine?'★ OFFICIAL NDFD':verifySourceLabel(k),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?10:7,borderWidth:ndfdLine?6.5:(nbmLine?4:3.2),borderDash:nbmLine?[9,5]:[],borderColor:c,backgroundColor:c,pointStyle:nbmLine?'rectRot':'circle',pointBackgroundColor:ndfdLine?'rgba(255,255,255,1)':c,pointBorderColor:ndfdLine?c:'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?3.2:1.8,order:ndfdLine?0:10});
-  });
-
-  const canvas=document.getElementById('verificationChart');
-  if(state.verificationChart)state.verificationChart.destroy();
-  const chartReady=await ensureVerificationChartLibrary();
-  if(chartReady&&window.Chart&&canvas){
-    state.verificationChart=new Chart(canvas,{type:'line',data:{labels:chartLabels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#dbe9f5',boxWidth:12,font:{family:'Poppins',size:10},filter:item=>!!item.text}},tooltip:{filter:c=>!!c.dataset.label,callbacks:{label:c=>{const bias=c.dataset._bias&&c.dataset._bias[c.dataIndex]!=null?Number(c.dataset._bias[c.dataIndex]):null;return c.dataset.label.replace(' ★','')+': MAE '+(c.parsed.y==null?'—':c.parsed.y.toFixed(2)+'°F')+(isNum(bias)?' · Bias '+(bias>=0?'+':'')+bias.toFixed(2)+'°F':'')}}}},scales:{x:{ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.12)'}},y:{beginAtZero:true,title:{display:true,text:'Mean Absolute Error (°F)',color:'#cbdbe9',font:{family:'Poppins',size:10}},ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.16)'}}}}});
-  }
-}
 
 function strictFrequencyCountyForPoint(data,lon,lat){
   if(!data||!data.countiesGeoJson||!isNum(Number(lon))||!isNum(Number(lat)))return null;
@@ -717,6 +476,7 @@ async function loadSeason(){
       normalizeFrequencyStationsStrict(data);
       await mergeCwopDailyIntoFrequency(data);
       state.data=data;
+      invalidateFrequencyCache();
       initializeTimeline();
       fitMaps();
       renderFrequency();
@@ -736,8 +496,8 @@ async function loadSeason(){
 function initializeTimeline(){if(!state.data)return;const slider=document.getElementById('timelineSlider');slider.max=Math.max(0,state.data.dates.length-1);state.timelineIndex=Math.max(0,state.data.dates.length-1);slider.value=state.timelineIndex;state.freqMetric='count';document.getElementById('freqMetricLabel').textContent='CUMULATIVE HITS';document.getElementById('freqCountView').classList.add('active');document.getElementById('freqSinceView').classList.remove('active');updateTimelineDate()}
 function setFrequencyMetric(metric){state.freqMetric=metric==='since'?'since':'count';document.getElementById('freqMetricLabel').textContent=state.freqMetric==='since'?'DAYS SINCE LAST HIT':'CUMULATIVE HITS';document.getElementById('freqCountView').classList.toggle('active',state.freqMetric==='count');document.getElementById('freqSinceView').classList.toggle('active',state.freqMetric==='since');renderFrequency()}
 function updateTimelineDate(){const el=document.getElementById('timelineDate');if(!state.data||!state.data.dates.length){el.textContent='—';return}el.textContent=formatDayLabel(state.data.dates[state.timelineIndex])}
-function stepTimeline(delta){if(!state.data||!state.data.dates.length)return;state.timelineIndex=Math.max(0,Math.min(state.data.dates.length-1,state.timelineIndex+delta));document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();renderFrequency()}
-function toggleTimelinePlay(){const btn=document.getElementById('timelinePlay');if(state.timelineTimer){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}btn.textContent='PAUSE';state.timelineTimer=setInterval(()=>{if(!state.data)return;if(state.timelineIndex>=state.data.dates.length-1){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}state.timelineIndex++;document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();renderFrequency()},500)}
+function stepTimeline(delta){if(!state.data||!state.data.dates.length)return;state.timelineIndex=Math.max(0,Math.min(state.data.dates.length-1,state.timelineIndex+delta));document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();scheduleFrequencyRender()}
+function toggleTimelinePlay(){const btn=document.getElementById('timelinePlay');if(state.timelineTimer){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}btn.textContent='PAUSE';state.timelineTimer=setInterval(()=>{if(!state.data)return;if(state.timelineIndex>=state.data.dates.length-1){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}state.timelineIndex++;document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();scheduleFrequencyRender()},350)}
 function formatDayLabel(s){if(!s)return'—';const d=new Date(s+'T12:00:00Z');return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(d)}
 function formatShortDate(s){if(!s)return'—';const d=new Date(s+'T12:00:00Z');return new Intl.DateTimeFormat('en-US',{month:'short',day:'2-digit',timeZone:'UTC'}).format(d)}
 function fitMaps(){if(!state.data||!state.data.countiesGeoJson)return;fitMapToCwa(state.frequencyMap,state.cwaFilter);fitMapToCwa(state.productsMap,state.productCwa);fitMapToCwa(state.forecastMap,state.forecastCwa);fitMapToCwa(state.frostMap,state.frostCwa)}
@@ -755,9 +515,14 @@ function loadFrequencyExclusions(){
   state.freqExcludedStations=new Set(ids.map(normalizeStationId).filter(Boolean));
   setTimeout(renderFrequencyExclusionList,0);
 }
+function invalidateFrequencyCache(){
+  state.freqBaseCache=null;
+  state.freqHitCache=null;
+}
 function saveFrequencyExclusions(){
   try{localStorage.setItem(FREQ_EXCLUSION_KEY,JSON.stringify([...state.freqExcludedStations].sort()))}catch(e){}
   renderFrequencyExclusionList();
+  invalidateFrequencyCache();
   if(state.data)renderFrequency();
 }
 function isFrequencyStationExcluded(st){
@@ -785,41 +550,118 @@ function renderFrequencyExclusionList(){
   el.innerHTML=ids.length?ids.map(id=>'<button class="chip" type="button" title="Restore '+esc(id)+'" data-restore-station="'+esc(id)+'">'+esc(id)+' ×</button>').join(''):'<span class="small">No stations excluded.</span>';
   el.querySelectorAll('[data-restore-station]').forEach(b=>b.addEventListener('click',()=>restoreFrequencyStation(b.dataset.restoreStation)));
 }
+function frequencyCacheSignature(){
+  const exclusions=[...(state.freqExcludedStations||[])].sort().join(',');
+  return String(state.data?.season?.label||'')+'|'+String(state.data?.dates?.length||0)+'|'+exclusions;
+}
+function ensureFrequencyBaseCache(){
+  if(!state.data)return null;
+  const signature=frequencyCacheSignature();
+  if(state.freqBaseCache&&state.freqBaseCache.signature===signature)return state.freqBaseCache;
+  const dates=state.data.dates||[],featureByFips=new Map();
+  for(const f of (state.data.countiesGeoJson?.features||[])){
+    featureByFips.set(String((f.properties||{}).fips||'').padStart(5,'0'),f);
+  }
+  const counties=new Map();
+  for(const row of Object.values(state.data.countyStats||{})){
+    const fips=String(row.fips||'').padStart(5,'0'),feature=featureByFips.get(fips)||null;
+    const stations=(row.stationDaily||[]).filter(st=>
+      !isFrequencyStationExcluded(st)&&feature&&isNum(num(st.lon))&&isNum(num(st.lat))&&pointInFeature(num(st.lon),num(st.lat),feature)
+    );
+    const temp=Array(dates.length).fill(null),feel=Array(dates.length).fill(null);
+    for(const st of stations){
+      const tt=st.dailyMinTemp||[],ff=st.dailyMinFeel||[];
+      for(let i=0;i<dates.length;i++){
+        const t=saneAirTempF(tt[i]),a=saneApparentF(ff[i]);
+        if(isNum(t))temp[i]=temp[i]===null?t:Math.min(temp[i],t);
+        if(isNum(a))feel[i]=feel[i]===null?a:Math.min(feel[i],a);
+      }
+    }
+    counties.set(fips,{feature,stations,temp,feel});
+  }
+  state.freqBaseCache={signature,featureByFips,counties};
+  state.freqHitCache=null;
+  return state.freqBaseCache;
+}
 function frequencyCountyFeature(s){
-  return (state.data?.countiesGeoJson?.features||[]).find(f=>String((f.properties||{}).fips||'').padStart(5,'0')===String(s.fips||'').padStart(5,'0'))||null;
+  const cache=ensureFrequencyBaseCache();
+  return cache?.featureByFips.get(String(s.fips||'').padStart(5,'0'))||null;
 }
 function activeFrequencyStations(s){
-  const feature=frequencyCountyFeature(s);
-  return (s.stationDaily||[]).filter(st=>!isFrequencyStationExcluded(st)&&feature&&isNum(num(st.lon))&&isNum(num(st.lat))&&pointInFeature(num(st.lon),num(st.lat),feature));
+  const cache=ensureFrequencyBaseCache();
+  return cache?.counties.get(String(s.fips||'').padStart(5,'0'))?.stations||[];
 }
 function countyStationValuesAtIndex(s,i){
-  const temps=[],feels=[];
-  for(const st of activeFrequencyStations(s)){
-    const t=saneAirTempF((st.dailyMinTemp||[])[i]),f=saneApparentF((st.dailyMinFeel||[])[i]);
-    if(isNum(t))temps.push(t);
-    if(isNum(f))feels.push(f);
-  }
-  return{temp:temps.length?Math.min(...temps):null,feel:feels.length?Math.min(...feels):null};
+  const cache=ensureFrequencyBaseCache(),row=cache?.counties.get(String(s.fips||'').padStart(5,'0'));
+  return{temp:row?.temp?.[i]??null,feel:row?.feel?.[i]??null};
 }
 function countySeriesThrough(s,maxIndex,kind){
-  const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1)),out=[];
-  for(let i=0;i<=end;i++){const v=countyStationValuesAtIndex(s,i);out.push(kind==='feel'?v.feel:v.temp)}
+  const cache=ensureFrequencyBaseCache(),row=cache?.counties.get(String(s.fips||'').padStart(5,'0'));
+  const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
+  return ((kind==='feel'?row?.feel:row?.temp)||[]).slice(0,end+1);
+}
+function frequencyHitKey(){
+  return frequencyCacheSignature()+'|'+state.selectedMode+'|'+state.threshold;
+}
+function ensureFrequencyHitCache(){
+  const base=ensureFrequencyBaseCache();
+  if(!base)return null;
+  const key=frequencyHitKey();
+  if(state.freqHitCache&&state.freqHitCache.key===key)return state.freqHitCache;
+  const dates=state.data.dates||[],counties=new Map();
+  for(const s of Object.values(state.data.countyStats||{})){
+    const fips=String(s.fips||'').padStart(5,'0'),raw=base.counties.get(fips)||{temp:[],feel:[]};
+    const hits=Array(dates.length).fill(false),cumulative=Array(dates.length).fill(0),lastHit=Array(dates.length).fill(null);
+    let count=0,last=null;
+    for(let i=0;i<dates.length;i++){
+      const t=raw.temp[i]??null,f=raw.feel[i]??null,a=minFinite(t,f);
+      let hit=false;
+      if(state.selectedMode==='custom')hit=isNum(t)&&t<=state.threshold;
+      else if(state.selectedMode==='frost')hit=isNum(t)&&t<=37;
+      else if(state.selectedMode==='freeze')hit=isNum(t)&&t<=32;
+      else if(state.selectedMode==='hardfreeze')hit=isNum(t)&&t<=25;
+      else if(state.selectedMode==='cwa')hit=isNum(a)&&isNum(s.criteria?.coldAdvisory)&&a<=s.criteria.coldAdvisory;
+      else if(state.selectedMode==='ecw')hit=isNum(a)&&isNum(s.criteria?.extremeCold)&&a<=s.criteria.extremeCold;
+      hits[i]=hit;
+      if(hit){count++;last=i}
+      cumulative[i]=count;
+      lastHit[i]=last;
+    }
+    counties.set(fips,{hits,cumulative,lastHit});
+  }
+  state.freqHitCache={key,counties};
+  return state.freqHitCache;
+}
+function countForCountyThrough(s,maxIndex){
+  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0'));
+  const i=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
+  return row?.cumulative?.[i]??0;
+}
+function countForCounty(s){return countForCountyThrough(s,state.timelineIndex)}
+function hitDatesThrough(s,maxIndex){
+  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0')),out=[];
+  const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
+  for(let i=0;i<=end;i++)if(row?.hits?.[i])out.push(state.data.dates[i]);
   return out;
 }
-function renderFrequency(){if(!state.data)return;if(state.freqCountyLayer)state.frequencyMap.removeLayer(state.freqCountyLayer);state.freqLabelLayer.clearLayers();state.freqStationLayer.clearLayers();const idx=Math.max(0,Math.min(state.timelineIndex,state.data.dates.length-1)),metric=state.freqMetric,visible=Object.values(state.data.countyStats).filter(s=>cwaVisible(s.wfo)),metricValues=[];state.freqCountyLayer=L.geoJSON(state.data.countiesGeoJson,{style:f=>{const s=state.data.countyStats[String(f.properties.fips).padStart(5,'0')];if(!s||!cwaVisible(s.wfo))return{color:'#33485e',weight:.5,fillOpacity:.03,fillColor:'#13202d'};if(metric==='since'){const age=daysSinceLastHit(s,idx);if(age!==null)metricValues.push(age);return{color:age===null?'#596979':'#c8f5ff',weight:age===0?1.6:.8,fillColor:daysSinceColor(age),fillOpacity:age===null?.18:.76}}const c=countForCountyThrough(s,idx);metricValues.push(c);return{color:'#8fa6bd',weight:.7,fillColor:countColor(c),fillOpacity:.72}},onEachFeature:(f,l)=>{const s=state.data.countyStats[String(f.properties.fips).padStart(5,'0')];if(!s)return;if(metric==='since'){const age=daysSinceLastHit(s,idx),last=lastHitDateThrough(s,idx);l.bindTooltip((s.county||'')+', '+s.state+' · '+(age===null?'Not met':age===0?'Hit today':age+' days since')+(last?' · '+last:''),{sticky:true,className:'county-tip'})}else l.bindTooltip((s.county||'')+', '+s.state+' · '+countForCountyThrough(s,idx)+' hits through '+state.data.dates[idx],{sticky:true,className:'county-tip'});l.bindPopup(()=>countyPopup(s))}}).addTo(state.frequencyMap);
-if(document.getElementById('showCounts').checked){visible.forEach(s=>{if(!Number.isFinite(s.lat)||!Number.isFinite(s.lon))return;let label;if(metric==='since'){const age=daysSinceLastHit(s,idx);label=age===null?'—':String(age)}else label=String(countForCountyThrough(s,idx));const dateLabel=formatShortDate(state.data.dates[idx]);L.marker([s.lat,s.lon],{interactive:false,icon:L.divIcon({className:'county-label',html:'<div class="county-count-wrap"><div class="county-count-main">'+label+'</div><div class="county-count-date">('+dateLabel+')</div></div>',iconSize:[56,28],iconAnchor:[28,14]})}).addTo(state.freqLabelLayer)})}
-if(document.getElementById('showStations').checked){visible.forEach(s=>(s.stations||[]).filter(st=>!isFrequencyStationExcluded(st)).forEach(st=>L.circleMarker([st.lat,st.lon],{radius:3,color:'#06101a',weight:1,fillColor:'#d8f7ff',fillOpacity:.95}).bindTooltip(st.id+' · '+st.name).addTo(state.freqStationLayer)))}
-document.getElementById('freqSeason').textContent=state.data.season.label;document.getElementById('freqThreshold').textContent=modeLabel();if(metric==='since'){const ages=visible.map(s=>daysSinceLastHit(s,idx)),met=ages.filter(v=>v!==null);document.getElementById('freqMaxLabel').textContent='Longest since last hit';document.getElementById('freqCountiesLabel').textContent='Counties met this season';document.getElementById('freqMax').textContent=met.length?Math.max(...met)+' d':'—';document.getElementById('freqCounties').textContent=met.length;document.getElementById('thresholdDescription').textContent='As of '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();document.getElementById('lastHitNote').innerHTML='<b>Map:</b> number of days since each county last met the selected threshold. “Not met” means no hit yet this season.'}else{const counts=visible.map(s=>countForCountyThrough(s,idx));document.getElementById('freqMaxLabel').textContent='Highest cumulative count';document.getElementById('freqCountiesLabel').textContent='Counties with ≥1 hit';document.getElementById('freqMax').textContent=counts.length?Math.max(...counts):'—';document.getElementById('freqCounties').textContent=counts.filter(v=>v>0).length;document.getElementById('thresholdDescription').textContent='Through '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();document.getElementById('lastHitNote').innerHTML='<b>Map:</b> cumulative number of threshold hits from Sep 1 through the selected date.'}updateTimelineDate();updateFrequencyLegend()}
-function cwaVisible(wfo){return state.cwaFilter==='ALL'||wfo===state.cwaFilter}
-function countForCountyThrough(s,maxIndex){let count=0;const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));for(let i=0;i<=end;i++)if(hitForCountyIndex(s,i))count++;return count}
-function countForCounty(s){return countForCountyThrough(s,state.timelineIndex)}
-function hitDatesThrough(s,maxIndex){const out=[],end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));for(let i=0;i<=end;i++)if(hitForCountyIndex(s,i))out.push(state.data.dates[i]);return out}
 function hitDates(s){return hitDatesThrough(s,state.timelineIndex)}
-function lastHitIndexThrough(s,maxIndex){const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));for(let i=end;i>=0;i--)if(hitForCountyIndex(s,i))return i;return null}
+function lastHitIndexThrough(s,maxIndex){
+  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0'));
+  const i=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
+  return row?.lastHit?.[i]??null;
+}
 function daysSinceLastHit(s,maxIndex){const last=lastHitIndexThrough(s,maxIndex);return last===null?null:Math.max(0,maxIndex-last)}
 function lastHitDateThrough(s,maxIndex){const last=lastHitIndexThrough(s,maxIndex);return last===null?'':state.data.dates[last]}
 function valueForCountyIndex(s,i){const v=countyStationValuesAtIndex(s,i),t=v.temp,f=v.feel;return(state.selectedMode==='cwa'||state.selectedMode==='ecw')?minFinite(t,f):t}
-function hitForCountyIndex(s,i){const v=countyStationValuesAtIndex(s,i),t=v.temp,f=v.feel,a=minFinite(t,f);if(state.selectedMode==='custom')return isNum(t)&&t<=state.threshold;if(state.selectedMode==='frost')return isNum(t)&&t<=37;if(state.selectedMode==='freeze')return isNum(t)&&t<=32;if(state.selectedMode==='hardfreeze')return isNum(t)&&t<=25;if(state.selectedMode==='cwa')return isNum(a)&&isNum(s.criteria.coldAdvisory)&&a<=s.criteria.coldAdvisory;if(state.selectedMode==='ecw')return isNum(a)&&isNum(s.criteria.extremeCold)&&a<=s.criteria.extremeCold;return false}
+function hitForCountyIndex(s,i){
+  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0'));
+  return !!row?.hits?.[i];
+}
+function scheduleFrequencyRender(){
+  if(state.freqRenderRaf)cancelAnimationFrame(state.freqRenderRaf);
+  state.freqRenderRaf=requestAnimationFrame(()=>{state.freqRenderRaf=null;renderFrequency()});
+}
+
 function daysSinceColor(age){if(age===null)return'#1a2632';if(age===0)return'#19e6ff';if(age<=2)return'#22c8cf';if(age<=5)return'#42b883';if(age<=10)return'#a4b84a';if(age<=20)return'#d39d3f';if(age<=40)return'#d06d4e';return'#a44f86'}
 function countColor(c){if(c<=0)return'#172534';if(c===1)return'#386c83';if(c<=3)return'#2a9db8';if(c<=6)return'#287bd1';if(c<=10)return'#4c5bdc';if(c<=15)return'#7750d7';return'#a83fc4'}
 function modeLabel(){if(state.selectedMode==='custom')return'≤'+state.threshold+'°F';if(state.selectedMode==='frost')return'Frost ≤37°';if(state.selectedMode==='freeze')return'Freeze ≤32°';if(state.selectedMode==='hardfreeze')return'Hard freeze ≤25°';if(state.selectedMode==='cwa')return'Cold Advisory';return'Extreme Cold'}
