@@ -54,12 +54,24 @@ jobs:
               finally:
                   os.unlink(path)
 
-          print("\n=== NBM QMD F024 index sample ===")
+          print("\n=== Search all 12Z QMD files for MinT percentile records ===")
           b="noaa-nbm-grib2-pds"
-          k="blend.20261115/12/qmd/blend.t12z.qmd.f024.co.grib2"
-          lines=get_idx(b,k)
-          for line in lines:
-              up=line.upper()
-              if any(tok in up for tok in ("TMP","TMIN","PERCENT","10%","25%","50%","75%","90%")):
-                  print(line)
+          pref="blend.20261115/12/qmd/"
+          r=s3.list_objects_v2(Bucket=b,Prefix=pref,MaxKeys=1000)
+          keys=[o["Key"] for o in r.get("Contents",[]) if o["Key"].endswith(".co.grib2")]
+          print("FILES",len(keys))
+          found=0
+          for k in keys:
+              try: lines=get_idx(b,k)
+              except Exception: continue
+              hits=[]
+              for line in lines:
+                  up=line.upper()
+                  if "TMIN" in up or ("TMP" in up and "MIN FCST" in up and any(p in up for p in ("10% LEVEL","25% LEVEL","50% LEVEL","75% LEVEL","90% LEVEL"))):
+                      hits.append(line)
+              if hits:
+                  print("\nKEY",k)
+                  for line in hits: print(line)
+                  found += len(hits)
+          print("FOUND",found)
           PY
