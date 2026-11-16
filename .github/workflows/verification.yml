@@ -48,12 +48,14 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path("site/data/verification.json").read_text())
-          assert p.get("schemaVersion") == 2, "verification.json is not lead-time schema v2"
+          assert p.get("schemaVersion") == 3, "verification.json is not lead-time schema v3"
           for wfo, block in p.get("cwas", {}).items():
               by_lead = block.get("byLead") or {}
               for lead in ("12", "24", "36", "48", "60"):
                   assert lead in by_lead, f"{wfo}: missing lead {lead}"
-          print("Lead-time verification schema validated.")
+                  ndfd = (by_lead.get(lead) or {}).get("dailyMae", {}).get("NDFD")
+                  assert isinstance(ndfd, list) and any(v is not None for v in ndfd), f"{wfo}: NDFD lead {lead} has no verification data"
+          print("Lead-time verification schema v3 validated, including NDFD history.")
           PY
 
       - name: Save verification JSON
