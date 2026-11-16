@@ -19,9 +19,6 @@ import math
 import os
 import subprocess
 import tempfile
-import re
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -257,87 +254,6 @@ def discover_ndfd_mint_prefix():
     return _ndfd_mint_prefix
 
 
-def _parse_iso_utc(value):
-    if not isinstance(value, str):
-        return None
-    text = value.strip().replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(text)
-    except Exception:
-        try:
-            dt = datetime.strptime(value.strip()[:16], "%Y-%m-%dT%H:%M")
-        except Exception:
-            return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-def ndfd_issuance_times(valid_day):
-    """Return NOAA-published NDFD issuance/reference times for one MinT valid time."""
-    valid_text = datetime(valid_day.year, valid_day.month, valid_day.day, 12, tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M")
-    query = urlencode({
-        "grid": "ndfd",
-        "elmt": "mint",
-        "region": "conus",
-        "vt": valid_text,
-    })
-    url = "https://digital.weather.gov/scripts/get_issuancetimes.php?" + query
-    req = Request(url, headers={"User-Agent": "Regional-Cold-Season-Verification/1.0"})
-    with urlopen(req, timeout=45) as resp:
-        raw = resp.read().decode("utf-8", errors="replace")
-
-    values = []
-    try:
-        payload = json.loads(raw)
-        def walk(obj):
-            if isinstance(obj, str):
-                values.append(obj)
-            elif isinstance(obj, list):
-                for item in obj:
-                    walk(item)
-            elif isinstance(obj, dict):
-                for item in obj.values():
-                    walk(item)
-        walk(payload)
-    except Exception:
-        # Be tolerant of endpoint formatting changes; recover ISO timestamps
-        # directly from the response body.
-        values.extend(re.findall(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?", raw))
-
-    times = []
-    seen = set()
-    for value in values:
-        # Some JSON values contain surrounding descriptive text.
-        matches = re.findall(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?", value)
-        if not matches and isinstance(value, str):
-            matches = [value]
-        for token in matches:
-            dt = _parse_iso_utc(token)
-            if dt is not None and dt not in seen:
-                seen.add(dt)
-                times.append(dt)
-
-    times.sort()
-    if not times:
-        raise RuntimeError(f"No NDFD issuance times returned for MinT valid {valid_text}")
-    return times
-
-
-def nearest_ndfd_issue(valid_day, target_dt, issuance_times=None):
-    """Pick the NDFD reference time closest to a requested forecast lead.
-
-    Prefer an issuance at or before the target so the verification never uses
-    information that was not yet available at that lead. If none exist, use
-    the earliest available issuance.
-    """
-    times = issuance_times if issuance_times is not None else ndfd_issuance_times(valid_day)
-    prior = [dt for dt in times if dt <= target_dt]
-    if prior:
-        return min(prior, key=lambda dt: abs((dt - target_dt).total_seconds()))
-    return min(times, key=lambda dt: abs((dt - target_dt).total_seconds()))
-
-
 def debug_ndfd_keys(issue_dt, limit=20):
     """Compact diagnostic for NDFD WMO key naming near a requested issuance."""
     root = discover_ndfd_mint_prefix()
@@ -353,59 +269,65 @@ def debug_ndfd_keys(issue_dt, limit=20):
     return out
 
 
-def ndfd_archive_keys(issue_dt):
-    """Return the archived NDFD nighttime MinT snapshots available at issue_dt.
+_ndfd_day_cache = {}
 
-    NOAA's WMO archive filenames contain the dissemination/reference timestamp.
-    For the CONUS MinT families used here, select the latest YHUZ97/YHUZ98 file
-    at or before the requested lead time. Search the requested UTC date and the
-    preceding date so exact 00Z targets can correctly use the prior 23xx issue.
-    """
+
+def ndfd_day_objects(day):
+    """List relevant archived CONUS MinT objects for one UTC day once."""
+    cache_key = day.isoformat()
+    if cache_key in _ndfd_day_cache:
+        return _ndfd_day_cache[cache_key]
+
+    prefix = f"wmo/mint/{day:%Y/%m/%d}/"
     families = ("YHUZ97_KWBN_", "YHUZ98_KWBN_")
-    candidates = {fam: [] for fam in families}
+    rows = []
+    token = None
+    while True:
+        kw = {"Bucket": NDFD_BUCKET, "Prefix": prefix, "MaxKeys": 1000}
+        if token:
+            kw["ContinuationToken"] = token
+        resp = s3.list_objects_v2(**kw)
+        for obj in resp.get("Contents", []):
+            key = obj.get("Key", "")
+            name = key.rsplit("/", 1)[-1]
+            if not name.startswith(families):
+                continue
+            stamp = name.rsplit("_", 1)[-1][:12]
+            try:
+                ts = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            rows.append((ts, key))
+        if not resp.get("IsTruncated"):
+            break
+        token = resp.get("NextContinuationToken")
 
+    rows.sort(key=lambda row: row[0])
+    _ndfd_day_cache[cache_key] = rows
+    return rows
+
+
+def ndfd_archive_keys(issue_dt):
+    """Return the latest archived NDFD MinT object(s) available by issue_dt."""
+    rows = []
     for day_offset in (0, -1):
-        day = (issue_dt + timedelta(days=day_offset)).date()
-        prefix = f"wmo/mint/{day:%Y/%m/%d}/"
-        token = None
-        while True:
-            kw = {"Bucket": NDFD_BUCKET, "Prefix": prefix, "MaxKeys": 1000}
-            if token:
-                kw["ContinuationToken"] = token
-            resp = s3.list_objects_v2(**kw)
-            for obj in resp.get("Contents", []):
-                key = obj.get("Key", "")
-                name = key.rsplit("/", 1)[-1]
-                fam = next((x for x in families if name.startswith(x)), None)
-                if fam is None:
-                    continue
-                stamp = name.rsplit("_", 1)[-1][:12]
-                try:
-                    ts = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
-                except Exception:
-                    continue
-                candidates[fam].append((ts, key))
-            if not resp.get("IsTruncated"):
-                break
-            token = resp.get("NextContinuationToken")
+        rows.extend(ndfd_day_objects((issue_dt + timedelta(days=day_offset)).date()))
+    if not rows:
+        raise RuntimeError(f"No archived NDFD MinT objects found near {issue_dt:%Y-%m-%d %H:%MZ}")
 
-    selected = []
-    for fam in families:
-        rows = candidates[fam]
-        if not rows:
-            continue
-        prior = [row for row in rows if row[0] <= issue_dt]
-        if prior:
-            ts, key = max(prior, key=lambda row: row[0])
-        else:
-            ts, key = min(rows, key=lambda row: abs((row[0] - issue_dt).total_seconds()))
-        selected.append((abs((ts - issue_dt).total_seconds()), ts, key))
+    # Select the most recent snapshot at or before the requested lead time.
+    prior = [row for row in rows if row[0] <= issue_dt]
+    if prior:
+        selected_time = max(row[0] for row in prior)
+    else:
+        selected_time = min(rows, key=lambda row: abs((row[0] - issue_dt).total_seconds()))[0]
 
-    if not selected:
-        raise RuntimeError(f"No archived YHUZ97/YHUZ98 NDFD MinT files found near {issue_dt:%Y-%m-%d %H:%MZ}")
-
-    selected.sort(key=lambda row: row[0])
-    return [key for _, _, key in selected]
+    # Keep all relevant MinT sector/product files carrying the exact same
+    # dissemination timestamp so geographic coverage is preserved.
+    keys = [key for ts, key in rows if ts == selected_time]
+    if not keys:
+        raise RuntimeError(f"No NDFD MinT object selected for {issue_dt:%Y-%m-%d %H:%MZ}")
+    return keys
 
 def decode_ndfd_object(key, issue_dt, valid_day):
     """Decode archived NDFD MinT messages matching one requested issuance cycle."""
@@ -658,11 +580,6 @@ def main():
 
         nbm_by_lead = {}
         ndfd_by_lead = {}
-        try:
-            ndfd_issue_list = ndfd_issuance_times(valid_day)
-        except Exception as exc:
-            ndfd_issue_list = []
-            errors.append(f"{valid_day} NDFD issuance-time lookup failed: {exc}")
 
         for lead in lead_hours:
             init_dt = valid_dt - timedelta(hours=lead)
@@ -671,9 +588,11 @@ def main():
             except Exception as exc:
                 errors.append(f"{valid_day} NBM F{lead:03d}: {exc}")
             try:
-                issue_dt = nearest_ndfd_issue(valid_day, init_dt, ndfd_issue_list) if ndfd_issue_list else init_dt
-                grids = read_ndfd_archive(issue_dt, valid_day)
-                ndfd_by_lead[lead] = (grids, issue_dt)
+                keys = ndfd_archive_keys(init_dt)
+                actual_stamp = keys[0].rsplit("_", 1)[-1][:12]
+                actual_issue = datetime.strptime(actual_stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                grids = read_ndfd_archive(actual_issue, valid_day)
+                ndfd_by_lead[lead] = (grids, actual_issue)
             except Exception as exc:
                 errors.append(f"{valid_day} NDFD F{lead:03d}: {exc}")
 
@@ -788,7 +707,7 @@ def main():
             "defaultLeadHours": 24,
             "leadLabel": "24 h before verifying 12Z MinT",
             "sampleMode": "land",
-            "method": "CWA land-only sample nodes; NDFD uses the NOAA-published issuance/reference time at or immediately before each 12/24/36/48/60-hour target lead, while NBM uses its corresponding model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
+            "method": "CWA land-only sample nodes; NDFD uses the most recent archived WMO MinT snapshot timestamped at or before each 12/24/36/48/60-hour target lead, while NBM uses its corresponding model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
         }
 
     payload = {
