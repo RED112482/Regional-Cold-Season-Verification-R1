@@ -298,8 +298,13 @@
         <div class="section" style="min-width:330px">
           <div class="section-title">Forecast Office</div>
           <div id="verifyCwaChips" class="verify-cwas"></div>
-          <label class="verify-scope"><input id="verifyLandOnly" type="checkbox" checked disabled> Land only · marine omitted</label>
-          <div id="verifyScopeNote" class="verify-scope-note">County/land sample only; marine areas omitted.</div>
+          <div class="section-title" style="margin-top:8px">Verification Area</div>
+          <div id="verifyScopeButtons" class="verify-view-toggle">
+            <button class="period-btn active" data-verify-scope="land">LAND</button>
+            <button class="period-btn" data-verify-scope="marine">MARINE</button>
+            <button class="period-btn" data-verify-scope="both">BOTH</button>
+          </div>
+          <div id="verifyScopeNote" class="verify-scope-note">Land sample selected.</div>
         </div>
         <div class="section" style="flex:1;min-width:420px">
           <div class="section-title">NBM MinT Lead-Time Verification</div>
@@ -342,8 +347,9 @@
             <b>5-Day Trend:</b> choose a lead time and compare the last five verifying nights.<br>
             <b>One Night:</b> choose one verifying date and watch the forecast evolve from 60 hr to 12 hr lead.<br>
             <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus RTMA.<br>
-            <b>Spatial sample:</b> land-only county sample. Marine areas are omitted in the current verification archive.<br>
-            <b>NDFD:</b> archived lead-time verification is shown at the same 12/24/36/48/60-hour leads as NBM.
+            <b>Spatial sample:</b> switch between land, official NWS coastal marine zones, or both. Inland offices may not have a marine option.<br>
+            <b>NDFD:</b> archived lead-time verification is shown at the same 12/24/36/48/60-hour leads as NBM.<br>
+            <b>Important:</b> the lines show each source's MAE versus RTMA; distance between the NDFD and NBM lines is <i>not</i> the direct NDFD-minus-NBM forecast difference.
           </div>
         </div>
       </div>
@@ -378,7 +384,7 @@
 <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
-const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',verifyMode:'trend',verifyLeadHours:24,verifyDateIndex:4,verifyLandOnly:true,forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
+const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',verifyMode:'trend',verifyLeadHours:24,verifyDateIndex:4,verifySpatialMode:'land',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
 const PRODUCT_STYLE={
  'Frost Advisory':{color:'#6495ed'},'Freeze Watch':{color:'#00ffff'},'Freeze Warning':{color:'#483d8b'},'Cold Weather Advisory':{color:'#afeeee'},'Extreme Cold Watch':{color:'#5f9ea0'},'Extreme Cold Warning':{color:'#0000ff'},'Legacy Wind Chill':{color:'#8a6cff'},'Legacy Hard Freeze':{color:'#5540a5'}
 };
@@ -409,6 +415,11 @@ document.getElementById('verifyTrendView').addEventListener('click',()=>{state.v
 document.getElementById('verifyNightView').addEventListener('click',()=>{state.verifyMode='night';renderVerification()});
 document.getElementById('verifyLeadSlider').addEventListener('input',e=>{state.verifyLeadHours=Number(e.target.value);document.getElementById('verifyLeadValue').textContent=state.verifyLeadHours+' hr';renderVerification()});
 document.getElementById('verifyDateSelect').addEventListener('change',e=>{state.verifyDateIndex=Number(e.target.value);renderVerification()});
+document.querySelectorAll('#verifyScopeButtons [data-verify-scope]').forEach(btn=>btn.addEventListener('click',()=>{
+  state.verifySpatialMode=btn.dataset.verifyScope;
+  document.querySelectorAll('#verifyScopeButtons [data-verify-scope]').forEach(x=>x.classList.toggle('active',x===btn));
+  renderVerification();
+}));
 }
 function switchTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(tab+'Page').classList.add('active');setTimeout(()=>{if(tab==='frequency')state.frequencyMap.invalidateSize();if(tab==='products')state.productsMap.invalidateSize();if(tab==='forecast'){state.forecastMap.invalidateSize();renderForecast()}if(tab==='frost'){state.frostMap.invalidateSize();renderFrost()}if(tab==='verification')renderVerification()},80)}
 function buildCwaChips(){const el=document.getElementById('freqCwaChips');el.innerHTML=['ALL'].concat(state.config.wfos).map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.cwaFilter=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.frequencyMap,state.cwaFilter);renderFrequency()}));}
@@ -450,13 +461,29 @@ function ensureVerificationChartLibrary(){
   return verificationChartLoadPromise;
 }
 function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
-async function loadVerificationData(){try{const r=await fetch('./data/verification.json?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const root=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
+async function loadVerificationData(){try{const r=await fetch('./data/verification.json?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const cwa=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||cwa.scopes.land):cwa;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
 function verifySourceOrder(){return['NDFD','NBM Deterministic','P10','P25','P50','P75','P90']}
 function verifySourceLabel(k){return k==='NBM Deterministic'?'NBM Det':k}
 async function renderVerification(){
-  const data=state.verificationData,root=data&&data.cwas?data.cwas[state.verifyCwa]:null;
+  const data=state.verificationData,cwa=data&&data.cwas?data.cwas[state.verifyCwa]:null,
+        root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||null):cwa;
   const trendBtn=document.getElementById('verifyTrendView'),nightBtn=document.getElementById('verifyNightView'),dateCtl=document.getElementById('verifyDateControl');
   const sliderCtl=document.getElementById('verifyLeadSlider'),hasLeadArchive=!!(data&&data._hasLeadArchive);
+  const scopeButtons=[...document.querySelectorAll('#verifyScopeButtons [data-verify-scope]')];
+  const availableScopes=cwa&&cwa.scopes?Object.keys(cwa.scopes):['land'];
+  if(!availableScopes.includes(state.verifySpatialMode)){
+    state.verifySpatialMode=availableScopes.includes('land')?'land':availableScopes[0];
+  }
+  scopeButtons.forEach(btn=>{
+    const ok=availableScopes.includes(btn.dataset.verifyScope);
+    btn.disabled=!ok;
+    btn.classList.toggle('active',btn.dataset.verifyScope===state.verifySpatialMode);
+  });
+  const scopeNote=document.getElementById('verifyScopeNote');
+  if(scopeNote)scopeNote.textContent=
+    state.verifySpatialMode==='marine'?'Official NWS coastal marine-zone sample selected.':
+    state.verifySpatialMode==='both'?'Combined land + coastal marine-zone sample selected.':
+    'Land/county sample selected.';
   if(sliderCtl)sliderCtl.disabled=!root;
   if(nightBtn)nightBtn.disabled=!root;
   trendBtn?.classList.toggle('active',state.verifyMode==='trend');nightBtn?.classList.toggle('active',state.verifyMode==='night');
@@ -553,18 +580,23 @@ async function renderVerification(){
   document.getElementById('verifyBias').innerHTML=displayRanking.map(r=>'<div class="guidance-row"><div class="topline"><span>'+esc(verifySourceLabel(r.source))+'</span><span>'+(isNum(num(r.bias))?((num(r.bias)>=0?'+':'')+fmt(num(r.bias))+'°F'):'—')+'</span></div><div class="subline">Positive = forecast too warm · negative = too cold</div></div>').join('');
 
   const order=verifySourceOrder(),rankMap=new Map(displayRanking.map(r=>[r.source,r]));
-  const datasets=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v)))).map(k=>{
+  const datasets=[];
+  const orderedSources=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v))));
+  if(orderedSources.includes('NDFD')){
+    datasets.push({label:'',data:chartMae.NDFD,_bias:chartBias.NDFD||[],tension:.25,spanGaps:true,pointRadius:0,pointHoverRadius:0,borderWidth:11,borderColor:'rgba(0,0,0,.82)',backgroundColor:'rgba(0,0,0,0)',order:1});
+  }
+  orderedSources.forEach(k=>{
     const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',
-          c=ndfdLine?'rgba(75,220,255,1)':perfColor(isNum(m)?m:(bestMae??0),1);
-    const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?(ndfdLine?8:7):(ndfdLine?5:3.5)):(ndfdLine?6:4);
-    return{label:verifySourceLabel(k)+(ndfdLine?' ★ OFFICIAL NDFD':''),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?9:6,borderWidth:ndfdLine?6:3.2,borderDash:ndfdLine?[]:undefined,borderColor:c,backgroundColor:c,pointBackgroundColor:c,pointBorderColor:ndfdLine?'rgba(245,255,255,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?2.8:1.4,order:ndfdLine?0:1};
+          c=ndfdLine?'rgba(74,232,255,1)':perfColor(isNum(m)?m:(bestMae??0),1);
+    const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?(ndfdLine?9:7):(ndfdLine?6:3.5)):(ndfdLine?7:4);
+    datasets.push({label:ndfdLine?'★ OFFICIAL NDFD':verifySourceLabel(k),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?10:6,borderWidth:ndfdLine?6.5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:ndfdLine?'rgba(255,255,255,1)':c,pointBorderColor:ndfdLine?'rgba(0,170,210,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?3:1.4,order:ndfdLine?0:2});
   });
 
   const canvas=document.getElementById('verificationChart');
   if(state.verificationChart)state.verificationChart.destroy();
   const chartReady=await ensureVerificationChartLibrary();
   if(chartReady&&window.Chart&&canvas){
-    state.verificationChart=new Chart(canvas,{type:'line',data:{labels:chartLabels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#dbe9f5',boxWidth:12,font:{family:'Poppins',size:10}}},tooltip:{callbacks:{label:c=>{const bias=c.dataset._bias&&c.dataset._bias[c.dataIndex]!=null?Number(c.dataset._bias[c.dataIndex]):null;return c.dataset.label.replace(' ★','')+': MAE '+(c.parsed.y==null?'—':c.parsed.y.toFixed(2)+'°F')+(isNum(bias)?' · Bias '+(bias>=0?'+':'')+bias.toFixed(2)+'°F':'')}}}},scales:{x:{ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.12)'}},y:{beginAtZero:true,title:{display:true,text:'Mean Absolute Error (°F)',color:'#cbdbe9',font:{family:'Poppins',size:10}},ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.16)'}}}}});
+    state.verificationChart=new Chart(canvas,{type:'line',data:{labels:chartLabels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#dbe9f5',boxWidth:12,font:{family:'Poppins',size:10},filter:item=>!!item.text}},tooltip:{filter:c=>!!c.dataset.label,callbacks:{label:c=>{const bias=c.dataset._bias&&c.dataset._bias[c.dataIndex]!=null?Number(c.dataset._bias[c.dataIndex]):null;return c.dataset.label.replace(' ★','')+': MAE '+(c.parsed.y==null?'—':c.parsed.y.toFixed(2)+'°F')+(isNum(bias)?' · Bias '+(bias>=0?'+':'')+bias.toFixed(2)+'°F':'')}}}},scales:{x:{ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.12)'}},y:{beginAtZero:true,title:{display:true,text:'Mean Absolute Error (°F)',color:'#cbdbe9',font:{family:'Poppins',size:10}},ticks:{color:'#9fb4c9',font:{family:'Poppins',size:9}},grid:{color:'rgba(120,150,180,.16)'}}}}});
   }
 }
 
