@@ -297,7 +297,7 @@
         <div class="section" style="min-width:330px">
           <div class="section-title">Forecast Office</div>
           <div id="verifyCwaChips" class="verify-cwas"></div>
-          <label class="verify-scope"><input id="verifyLandOnly" type="checkbox" checked> Land only</label>
+          <label class="verify-scope"><input id="verifyLandOnly" type="checkbox" checked disabled> Land only · marine omitted</label>
           <div id="verifyScopeNote" class="verify-scope-note">County/land sample only; marine areas omitted.</div>
         </div>
         <div class="section" style="flex:1;min-width:420px">
@@ -408,7 +408,7 @@ document.getElementById('verifyTrendView').addEventListener('click',()=>{state.v
 document.getElementById('verifyNightView').addEventListener('click',()=>{state.verifyMode='night';renderVerification()});
 document.getElementById('verifyLeadSlider').addEventListener('input',e=>{state.verifyLeadHours=Number(e.target.value);document.getElementById('verifyLeadValue').textContent=state.verifyLeadHours+' hr';renderVerification()});
 document.getElementById('verifyDateSelect').addEventListener('change',e=>{state.verifyDateIndex=Number(e.target.value);renderVerification()});
-document.getElementById('verifyLandOnly').addEventListener('change',e=>{state.verifyLandOnly=e.target.checked;if(!state.verifyLandOnly){state.verifyLandOnly=true;e.target.checked=true;document.getElementById('verifyScopeNote').textContent='Marine verification is not yet stored; retaining land-only sample.'}else document.getElementById('verifyScopeNote').textContent='County/land sample only; marine areas omitted.';renderVerification()});}
+}
 function switchTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(tab+'Page').classList.add('active');setTimeout(()=>{if(tab==='frequency')state.frequencyMap.invalidateSize();if(tab==='products')state.productsMap.invalidateSize();if(tab==='forecast'){state.forecastMap.invalidateSize();renderForecast()}if(tab==='frost'){state.frostMap.invalidateSize();renderFrost()}if(tab==='verification')renderVerification()},80)}
 function buildCwaChips(){const el=document.getElementById('freqCwaChips');el.innerHTML=['ALL'].concat(state.config.wfos).map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.cwaFilter=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.frequencyMap,state.cwaFilter);renderFrequency()}));}
 function buildProductCwaChips(){const el=document.getElementById('productCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',async()=>{state.productCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.productsMap,state.productCwa);await loadLiveEvents(state.productCwa,Number(document.getElementById('seasonSelect').value),state.fallbackHazards)}));}
@@ -518,14 +518,14 @@ async function renderVerification(){
       chartBias[src]=leads.slice().sort((a,b)=>b-a).map(h=>num((((root.byLead||{})[String(h)]||{}).dailyBias||{})[src]?.[ix]));
     });
     const nightRows=sources.map(src=>{
-      const vals=leads.map(h=>num((((root.byLead||{})[String(h)]||{}).dailyMae||{})[src]?.[ix])).filter(isNum);
-      const bs=leads.map(h=>num((((root.byLead||{})[String(h)]||{}).dailyBias||{})[src]?.[ix])).filter(isNum);
-      return vals.length?{source:src,mae:vals[vals.length-1],bias:bs.length?bs[bs.length-1]:null,samples:0}:null;
+      const mae=num((((root.byLead||{})[String(state.verifyLeadHours)]||{}).dailyMae||{})[src]?.[ix]),
+            bias=num((((root.byLead||{})[String(state.verifyLeadHours)]||{}).dailyBias||{})[src]?.[ix]);
+      return isNum(mae)?{source:src,mae,bias,samples:0}:null;
     }).filter(Boolean).sort((a,b)=>a.mae-b.mae);
     displayRanking=nightRows;
     title='Forecast Evolution · '+formatDayLabel(night);
-    note='Left to right: 60h → 12h before verification. Downward lines mean the forecast improved as the night approached.';
-    document.getElementById('verifyRankingTitle').textContent='Selected Night · F12 Ranking';
+    note='Left to right: 60h → 12h before verification. Downward lines mean the forecast improved as the night approached. Ranking reflects the selected '+state.verifyLeadHours+'h lead.';
+    document.getElementById('verifyRankingTitle').textContent='Selected Night · F'+state.verifyLeadHours+' Ranking';
     const bestNight=nightRows.find(x=>/^P\d+/.test(x.source));
     document.getElementById('verifyBest').textContent=bestNight?bestNight.source:'—';
     document.getElementById('verifyBestMae').textContent=bestNight&&isNum(num(bestNight.mae))?num(bestNight.mae).toFixed(2)+'°F':'—';
@@ -546,7 +546,8 @@ async function renderVerification(){
   const order=verifySourceOrder(),rankMap=new Map(displayRanking.map(r=>[r.source,r]));
   const datasets=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v)))).map(k=>{
     const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',c=perfColor(isNum(m)?m:(bestMae??0),1);
-    return{label:verifySourceLabel(k)+(ndfdLine?' ★':''),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:ndfdLine?5.5:4,pointHoverRadius:ndfdLine?8:6,borderWidth:ndfdLine?5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:c,pointBorderColor:ndfdLine?'rgba(220,250,255,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?2.4:1.4};
+    const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?7:3.5):(ndfdLine?5.5:4);
+    return{label:verifySourceLabel(k)+(ndfdLine?' ★':''),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?8:6,borderWidth:ndfdLine?5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:c,pointBorderColor:ndfdLine?'rgba(220,250,255,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?2.4:1.4};
   });
 
   const canvas=document.getElementById('verificationChart');
