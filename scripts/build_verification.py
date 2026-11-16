@@ -354,43 +354,64 @@ def debug_ndfd_keys(issue_dt, limit=20):
 
 
 def ndfd_archive_keys(issue_dt):
-    """List archived NDFD MinT WMO files nearest the requested issuance time."""
-    root = discover_ndfd_mint_prefix()
-    issue_day = issue_dt.date()
-    prefix = f"{root}{issue_day:%Y/%m/%d}/"
-    ranked = []
-    token = None
-    target_minutes = issue_dt.hour * 60 + issue_dt.minute
-    while True:
-        kw = {"Bucket": NDFD_BUCKET, "Prefix": prefix, "MaxKeys": 1000}
-        if token:
-            kw["ContinuationToken"] = token
-        resp = s3.list_objects_v2(**kw)
-        for obj in resp.get("Contents", []):
-            key = obj["Key"]
-            rank = 99999
-            tail = key.rsplit("_", 1)[-1]
-            try:
-                ts = datetime.strptime(tail[:12], "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
-                rank = abs((ts.hour * 60 + ts.minute) - target_minutes)
-            except Exception:
-                pass
-            ranked.append((rank, key))
-        if not resp.get("IsTruncated"):
-            break
-        token = resp.get("NextContinuationToken")
-    if not ranked:
-        raise RuntimeError(f"No archived NDFD MinT WMO files found for {issue_day}")
-    return [k for _, k in sorted(ranked)]
+    """Return the archived NDFD nighttime MinT snapshots available at issue_dt.
 
+    NOAA's WMO archive filenames contain the dissemination/reference timestamp.
+    For the CONUS MinT families used here, select the latest YHUZ97/YHUZ98 file
+    at or before the requested lead time. Search the requested UTC date and the
+    preceding date so exact 00Z targets can correctly use the prior 23xx issue.
+    """
+    families = ("YHUZ97_KWBN_", "YHUZ98_KWBN_")
+    candidates = {fam: [] for fam in families}
+
+    for day_offset in (0, -1):
+        day = (issue_dt + timedelta(days=day_offset)).date()
+        prefix = f"wmo/mint/{day:%Y/%m/%d}/"
+        token = None
+        while True:
+            kw = {"Bucket": NDFD_BUCKET, "Prefix": prefix, "MaxKeys": 1000}
+            if token:
+                kw["ContinuationToken"] = token
+            resp = s3.list_objects_v2(**kw)
+            for obj in resp.get("Contents", []):
+                key = obj.get("Key", "")
+                name = key.rsplit("/", 1)[-1]
+                fam = next((x for x in families if name.startswith(x)), None)
+                if fam is None:
+                    continue
+                stamp = name.rsplit("_", 1)[-1][:12]
+                try:
+                    ts = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                except Exception:
+                    continue
+                candidates[fam].append((ts, key))
+            if not resp.get("IsTruncated"):
+                break
+            token = resp.get("NextContinuationToken")
+
+    selected = []
+    for fam in families:
+        rows = candidates[fam]
+        if not rows:
+            continue
+        prior = [row for row in rows if row[0] <= issue_dt]
+        if prior:
+            ts, key = max(prior, key=lambda row: row[0])
+        else:
+            ts, key = min(rows, key=lambda row: abs((row[0] - issue_dt).total_seconds()))
+        selected.append((abs((ts - issue_dt).total_seconds()), ts, key))
+
+    if not selected:
+        raise RuntimeError(f"No archived YHUZ97/YHUZ98 NDFD MinT files found near {issue_dt:%Y-%m-%d %H:%MZ}")
+
+    selected.sort(key=lambda row: row[0])
+    return [key for _, _, key in selected]
 
 def decode_ndfd_object(key, issue_dt, valid_day):
     """Decode archived NDFD MinT messages matching one requested issuance cycle."""
     body = s3.get_object(Bucket=NDFD_BUCKET, Key=key)["Body"].read()
     messages = []
     pos = 0
-    target_date = issue_dt.strftime("%Y%m%d")
-    target_hour = issue_dt.hour
     while True:
         a = body.find(b"GRIB", pos)
         if a < 0:
@@ -429,23 +450,17 @@ def decode_ndfd_object(key, issue_dt, valid_day):
                 continue
             if vt is not None and int(vt) not in (1200, 120000):
                 continue
-            if dd is not None and str(dd) != target_date:
-                continue
-            if dtm is not None:
-                hh = int(dtm) // 100 if int(dtm) >= 100 else int(dtm)
-                # NDFD grids can be disseminated shortly around the nominal
-                # issuance time. Accept +/- 1 hour but do not substitute a
-                # different forecast cycle.
-                delta = abs(hh - target_hour)
-                delta = min(delta, 24 - delta)
-                if delta > 1:
-                    continue
             if "K" in units or units.lower().startswith("k"):
                 vals = (vals - 273.15) * 9.0 / 5.0 + 32.0
             vals = np.where(np.isfinite(vals) & (vals > -120.0) & (vals < 160.0), vals, np.nan)
             lons = np.where(lons > 180, lons - 360, lons)
             if np.isfinite(vals).any():
-                messages.append((vals, lats, lons, {"source": key, "issueUtc": issue_dt.isoformat()}))
+                actual_stamp = key.rsplit("_", 1)[-1][:12]
+                try:
+                    actual_issue = datetime.strptime(actual_stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                except Exception:
+                    actual_issue = issue_dt
+                messages.append((vals, lats, lons, {"source": key, "issueUtc": actual_issue.isoformat()}))
         finally:
             try:
                 os.unlink(path)
@@ -462,8 +477,6 @@ def read_ndfd_archive(issue_dt, valid_day):
             grids.extend(decode_ndfd_object(key, issue_dt, valid_day))
         except Exception:
             continue
-        if len(grids) >= 8:
-            break
     if not grids:
         raise RuntimeError(f"No usable archived NDFD MinT grids for {issue_dt:%Y-%m-%d %HZ} -> {valid_day}")
     return grids
