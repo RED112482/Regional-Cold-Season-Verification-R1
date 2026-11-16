@@ -449,15 +449,16 @@ function ensureVerificationChartLibrary(){
   return verificationChartLoadPromise;
 }
 function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
-async function loadVerificationData(){try{const r=await fetch('./data/verification.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const root=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));if(payload.schemaVersion!==2||!hasLeadArchive)throw new Error('Lead-time archive is rebuilding. The current file is the old single-lead dataset, so F12/F24/F36/F48/F60 and One Night are intentionally disabled until the archive refresh completes.');state.verificationData=payload;if(root){state.verifyLeadHours=Number(root.defaultLeadHours||payload.defaultLeadHours||24);state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent=err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';const slider=document.getElementById('verifyLeadSlider');if(slider)slider.disabled=true;const night=document.getElementById('verifyNightView');if(night)night.disabled=true;}}
+async function loadVerificationData(){try{const r=await fetch('./data/verification.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const root=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
 function verifySourceOrder(){return['NDFD','NBM Deterministic','P10','P25','P50','P75','P90']}
 function verifySourceLabel(k){return k==='NBM Deterministic'?'NBM Det':k}
 async function renderVerification(){
   const data=state.verificationData,root=data&&data.cwas?data.cwas[state.verifyCwa]:null;
   const trendBtn=document.getElementById('verifyTrendView'),nightBtn=document.getElementById('verifyNightView'),dateCtl=document.getElementById('verifyDateControl');
-  const sliderCtl=document.getElementById('verifyLeadSlider');
-  if(sliderCtl)sliderCtl.disabled=!root;
-  if(nightBtn)nightBtn.disabled=!root;
+  const sliderCtl=document.getElementById('verifyLeadSlider'),hasLeadArchive=!!(data&&data._hasLeadArchive);
+  if(sliderCtl)sliderCtl.disabled=!root||!hasLeadArchive;
+  if(nightBtn)nightBtn.disabled=!root||!hasLeadArchive;
+  if(!hasLeadArchive&&state.verifyMode==='night')state.verifyMode='trend';
   trendBtn?.classList.toggle('active',state.verifyMode==='trend');nightBtn?.classList.toggle('active',state.verifyMode==='night');
   if(dateCtl)dateCtl.style.display=state.verifyMode==='night'?'block':'none';
 
@@ -496,7 +497,7 @@ async function renderVerification(){
   document.getElementById('verifyBest').textContent=pct?pct.source:'—';
   document.getElementById('verifyBestMae').textContent=pct&&isNum(num(pct.mae))?num(pct.mae).toFixed(2)+'°F':'—';
   document.getElementById('verifyNdfdMae').textContent=ndfd24&&isNum(num(ndfd24.mae))?num(ndfd24.mae).toFixed(2)+'°F':'—';
-  document.getElementById('verifyUpdated').textContent='Last '+dates.length+' completed nights · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
+  document.getElementById('verifyUpdated').textContent=(!hasLeadArchive?'Showing existing 24-hour verification while archived F12/F24/F36/F48/F60 data rebuilds · ':'Last '+dates.length+' completed nights · ')+ 'Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
 
   function perfColor(mae,alpha=1){
     if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(40,209,124,'+alpha+')';
