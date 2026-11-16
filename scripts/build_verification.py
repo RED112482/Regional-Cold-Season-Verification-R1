@@ -124,6 +124,94 @@ def historical_forecast_snapshot(issue_day):
     return None, None, None
 
 
+
+_forecast_history_cache = None
+_forecast_payload_cache = {}
+
+
+def forecast_history():
+    """Return forecast.json commits newest-first with UTC commit times."""
+    global _forecast_history_cache
+    if _forecast_history_cache is not None:
+        return _forecast_history_cache
+    rows = []
+    for line in git("log", "--format=%H|%cI", "--", "site/data/forecast.json").splitlines():
+        try:
+            sha, ts = line.split("|", 1)
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except Exception:
+            continue
+        rows.append((dt, sha))
+    _forecast_history_cache = rows
+    return rows
+
+
+def forecast_payload_at_sha(sha):
+    if sha in _forecast_payload_cache:
+        return _forecast_payload_cache[sha]
+    try:
+        payload = json.loads(git("show", f"{sha}:site/data/forecast.json"))
+    except Exception:
+        payload = None
+    _forecast_payload_cache[sha] = payload
+    return payload
+
+
+def historical_forecast_at(target_dt, valid_day):
+    """Return the NDFD snapshot that actually existed at target_dt.
+
+    The verifying MinT ending at valid_day 12Z corresponds to the overnight
+    forecast period whose endDate equals valid_day. Choose the latest committed
+    forecast.json at or before target_dt that still contains that night.
+    """
+    valid_iso = valid_day.isoformat()
+    candidates = [(dt, sha) for dt, sha in forecast_history() if dt <= target_dt]
+    candidates.sort(reverse=True)
+    # Search a bounded number of prior snapshots; the file is refreshed often,
+    # so the correct one should be near the target.
+    for dt, sha in candidates[:30]:
+        payload = forecast_payload_at_sha(sha)
+        if not payload:
+            continue
+        period_key = None
+        for key, period in (payload.get("periods") or {}).items():
+            if str((period or {}).get("endDate") or "") == valid_iso:
+                period_key = key
+                break
+        if not period_key:
+            continue
+        # Prefer the payload's own generation time as the true snapshot time.
+        gen = payload.get("generatedUtc")
+        try:
+            issue_dt = datetime.fromisoformat(str(gen).replace("Z", "+00:00")).astimezone(timezone.utc) if gen else dt
+        except Exception:
+            issue_dt = dt
+        if issue_dt > target_dt + timedelta(minutes=10):
+            continue
+        return payload, period_key, sha, issue_dt
+    return None, None, None, None
+
+
+def sample_snapshot_field(field, period_key, points):
+    """Sample one historical forecast.json field onto the verification nodes."""
+    vals = field.get(period_key) or []
+    nx, ny = int(field["nx"]), int(field["ny"])
+    xmin, xmax = float(field["xmin"]), float(field["xmax"])
+    ymin, ymax = float(field["ymin"]), float(field["ymax"])
+    out = np.full(len(points), np.nan, dtype=float)
+    for n, (lat, lon, _) in enumerate(points):
+        gx = round((lon - xmin) / ((xmax - xmin) or 1) * (nx - 1))
+        gy = round((ymax - lat) / ((ymax - ymin) or 1) * (ny - 1))
+        gx = max(0, min(nx - 1, gx))
+        gy = max(0, min(ny - 1, gy))
+        k = gy * nx + gx
+        if k < len(vals):
+            v = safe_float(vals[k])
+            if v is not None:
+                out[n] = v
+    return out
+
+
 def sample_nodes(field, geoms, require_values=False):
     nx, ny = int(field["nx"]), int(field["ny"])
     xmin, xmax = float(field["xmin"]), float(field["xmax"])
@@ -588,11 +676,10 @@ def main():
             except Exception as exc:
                 errors.append(f"{valid_day} NBM F{lead:03d}: {exc}")
             try:
-                keys = ndfd_archive_keys(init_dt)
-                actual_stamp = keys[0].rsplit("_", 1)[-1][:12]
-                actual_issue = datetime.strptime(actual_stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
-                grids = read_ndfd_archive(actual_issue, valid_day)
-                ndfd_by_lead[lead] = (grids, actual_issue)
+                fpayload, period_key, fsha, issue_dt = historical_forecast_at(init_dt, valid_day)
+                if fpayload is None:
+                    raise RuntimeError("no forecast.json snapshot at or before target lead containing verifying night")
+                ndfd_by_lead[lead] = (fpayload, period_key, fsha, issue_dt)
             except Exception as exc:
                 errors.append(f"{valid_day} NDFD F{lead:03d}: {exc}")
 
@@ -631,10 +718,13 @@ def main():
                 ndfd_item = ndfd_by_lead.get(lead)
                 if ndfd_item is not None:
                     try:
-                        ndfd_grids, ndfd_issue_dt = ndfd_item
-                        ndfd = sample_grib_collection(ndfd_grids, points)
+                        fpayload, period_key, fsha, ndfd_issue_dt = ndfd_item
+                        hist_field = ((fpayload.get("fields") or {}).get(wfo) or {})
+                        ndfd = sample_snapshot_field(hist_field, period_key, points)
                         lead_row["NDFD"] = metrics(ndfd, obs)
                         lead_row["NDFDIssueUtc"] = ndfd_issue_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        lead_row["NDFDSnapshot"] = fsha
+                        lead_row["NDFDPeriod"] = period_key
                     except Exception as exc:
                         lead_row["NDFD"] = None
                         errors.append(f"{valid_day} {wfo} NDFD F{lead:03d}: sampling failed ({exc})")
@@ -707,7 +797,7 @@ def main():
             "defaultLeadHours": 24,
             "leadLabel": "24 h before verifying 12Z MinT",
             "sampleMode": "land",
-            "method": "CWA land-only sample nodes; NDFD uses the most recent archived WMO MinT snapshot timestamped at or before each 12/24/36/48/60-hour target lead, while NBM uses its corresponding model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
+            "method": "CWA land-only sample nodes; NDFD uses the most recent repository forecast.json snapshot generated at or before each 12/24/36/48/60-hour target lead and selects the dated overnight period ending on the verifying day. NBM uses its corresponding archived model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
         }
 
     payload = {
@@ -720,7 +810,7 @@ def main():
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
         "spatialModes": ["land"],
-        "method": "Rolling CWA land MAE and mean bias versus RTMA. NDFD history is keyed to NOAA reference/issuance times nearest but not later than each requested lead; NBM deterministic and percentiles use the corresponding archived model cycles.",
+        "method": "Rolling CWA land MAE and mean bias versus RTMA. NDFD history comes from the actual forecast.json snapshots committed by this project at or before each requested lead; NBM deterministic and percentiles use the corresponding archived model cycles.",
         "cwas": cwas,
         "errors": errors[-60:],
     }
@@ -737,7 +827,7 @@ def main():
         raise RuntimeError("Lead-time verification schema incomplete: " + "; ".join(missing_leads))
 
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-    print(f"Wrote {OUTPUT} (schemaVersion=3; archived NDFD issuance history + NBM lead cycles preserved)")
+    print(f"Wrote {OUTPUT} (schemaVersion=3; Git-backed NDFD forecast history + NBM lead cycles preserved)")
     for w in WFO_IDS:
         print(w, len(cwas[w]["dates"]), cwas[w]["byLead"].get("24", {}).get("ranking", [])[:3])
     if errors:
