@@ -461,13 +461,13 @@ function ensureVerificationChartLibrary(){
   });
   return verificationChartLoadPromise;
 }
-function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
+function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;const cwa=state.verificationData&&state.verificationData.cwas?state.verificationData.cwas[state.verifyCwa]:null;if(cwa&&cwa.scopes&&!cwa.scopes[state.verifySpatialMode])state.verifySpatialMode='land';el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
 async function loadVerificationData(){try{const r=await fetch('./data/verification.json?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const cwa=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||cwa.scopes.land):cwa;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
 function verifySourceOrder(){return['NDFD','NBM Deterministic']}
 function verifySourceLabel(k){return k==='NBM Deterministic'?'NBM Det':k}
 async function renderVerification(){
-  const data=state.verificationData,cwa=data&&data.cwas?data.cwas[state.verifyCwa]:null,
-        root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||null):cwa;
+  const data=state.verificationData,cwa=data&&data.cwas?data.cwas[state.verifyCwa]:null;
+  let root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||null):cwa;
   const trendBtn=document.getElementById('verifyTrendView'),nightBtn=document.getElementById('verifyNightView'),dateCtl=document.getElementById('verifyDateControl');
   const sliderCtl=document.getElementById('verifyLeadSlider'),hasLeadArchive=!!(data&&data._hasLeadArchive);
   const scopeButtons=[...document.querySelectorAll('#verifyScopeButtons [data-verify-scope]')];
@@ -475,6 +475,7 @@ async function renderVerification(){
   const availableScopes=hasSpatialScopes?Object.keys(cwa.scopes):['land'];
   if(!availableScopes.includes(state.verifySpatialMode)){
     state.verifySpatialMode=availableScopes.includes('land')?'land':availableScopes[0];
+    root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||null):cwa;
   }
   scopeButtons.forEach(btn=>{
     const ok=availableScopes.includes(btn.dataset.verifyScope);
