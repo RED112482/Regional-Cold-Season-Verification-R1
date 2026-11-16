@@ -54,25 +54,11 @@ jobs:
               finally:
                   os.unlink(path)
 
-          print("\n=== NBM files under 20261115/12/grib2 ===")
+          print("\n=== NBM bucket structure ===")
           b="noaa-nbm-grib2-pds"
-          pref="blend.20261115/12/grib2/"
-          r=s3.list_objects_v2(Bucket=b,Prefix=pref,MaxKeys=1000)
-          keys=[o["Key"] for o in r.get("Contents",[])]
-          for k in keys:
-              if "core" in k or "qmd" in k:
-                  print(k)
-
-          print("\n=== Candidate NBM MinT indexes ===")
-          candidates=[k for k in keys if ("core" in k or "qmd" in k) and "f024" in k and not k.endswith(".idx")]
-          for k in candidates:
-              print("\nKEY",k)
-              try:
-                  lines=get_idx(b,k)
-              except Exception as e:
-                  print("NO IDX",e);continue
-              for line in lines:
-                  up=line.upper()
-                  if "TMIN" in up or ("TMP" in up and ("MIN" in up or "2 M" in up)):
-                      print(line)
+          for pref in ("blend.20261115/","blend.20261115/12/","blend.20261115/00/"):
+              print("\nPREFIX",pref)
+              r=s3.list_objects_v2(Bucket=b,Prefix=pref,Delimiter="/",MaxKeys=1000)
+              print("COMMON", [x.get("Prefix") for x in r.get("CommonPrefixes",[])][:50])
+              print("OBJECTS", [x.get("Key") for x in r.get("Contents",[])][:50])
           PY
