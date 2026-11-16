@@ -1,0 +1,64 @@
+name: Inspect URMA TMIN and NBM MinT records
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify_field_probe.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install boto3
+      - name: Probe fields
+        run: |
+          python - <<'PY'
+          import boto3, json
+          from botocore import UNSIGNED
+          from botocore.client import Config
+          s3=boto3.client("s3",config=Config(signature_version=UNSIGNED))
+
+          print("=== URMA keys 2026-11-15 ===")
+          b="noaa-urma-pds"
+          for pref in ("urma2p5.20261115/","urma2p5.20261116/"):
+              r=s3.list_objects_v2(Bucket=b,Prefix=pref,MaxKeys=200)
+              for o in r.get("Contents",[]):
+                  k=o["Key"]
+                  if "t20z" in k or "mint" in k.lower():
+                      print(k)
+
+          print("\n=== URMA candidate indexes ===")
+          r=s3.list_objects_v2(Bucket=b,Prefix="urma2p5.20261115/",MaxKeys=500)
+          keys=[o["Key"] for o in r.get("Contents",[]) if "t20z" in o["Key"] and ("2dvaranl" in o["Key"] or "mint" in o["Key"].lower())]
+          for k in keys[:12]:
+              print("\nKEY",k)
+              for ik in (k+".idx", k.replace(".grb2_wexp",".grb2_wexp.idx"), k.replace(".grb2",".grb2.idx")):
+                  try:
+                      body=s3.get_object(Bucket=b,Key=ik)["Body"].read().decode("utf-8","replace")
+                      for line in body.splitlines():
+                          if any(x in line.lower() for x in ("tmp","tmin","min")):
+                              print(line)
+                      break
+                  except Exception:
+                      pass
+
+          print("\n=== NBM core F024 index 20261115 12Z ===")
+          b="noaa-nbm-grib2-pds"
+          k="blend.20261115/12/grib2/blend.t12z.core.f024.co.grib2"
+          body=s3.get_object(Bucket=b,Key=k+".idx")["Body"].read().decode("utf-8","replace")
+          for line in body.splitlines():
+              if "TMP" in line.upper() or "MIN" in line.upper():
+                  print(line)
+
+          print("\n=== NBM qmd F024 index 20261115 12Z ===")
+          k="blend.20261115/12/grib2/blend.t12z.qmd.f024.co.grib2"
+          body=s3.get_object(Bucket=b,Key=k+".idx")["Body"].read().decode("utf-8","replace")
+          for line in body.splitlines():
+              if "TMP" in line.upper() or "MIN" in line.upper() or "PERCENT" in line.upper():
+                  print(line)
+          PY
