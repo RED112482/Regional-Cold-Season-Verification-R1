@@ -323,7 +323,7 @@
             </div>
           </div>
           <div id="verifyUpdated" class="forecast-updated" style="margin-top:8px">Loading lead-time verification…</div>
-          <div class="small">MinT verified with RTMA · NDFD + NBM F12/F24/F36/F48/F60</div>
+          <div class="small">MinT verified with URMA TMIN · NDFD + NBM Det F12/F24/F36/F48/F60</div>
         </div>
       </div>
       <div class="verify-grid">
@@ -346,10 +346,11 @@
           <div class="section verify-method"><div class="section-title">How to Read It</div>
             <b>5-Day Trend:</b> choose a lead time and compare the last five verifying nights.<br>
             <b>One Night:</b> choose one verifying date and watch the forecast evolve from 60 hr to 12 hr lead.<br>
-            <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus RTMA. Forecast MinT is required to be valid at 12Z; RTMA verification uses the minimum hourly 2-m temperature from 00Z–12Z.<br>
+            <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus URMA TMIN. URMA provides the full 0–12Z minimum-temperature analysis valid at 12Z.<br>
             <b>Spatial sample:</b> switch between land, official NWS coastal marine zones, or both. Inland offices may not have a marine option.<br>
-            <b>NDFD:</b> archived lead-time verification is shown at the same 12/24/36/48/60-hour leads as NBM.<br>
-            <b>Important:</b> the lines show each source's MAE versus RTMA; distance between the NDFD and NBM lines is <i>not</i> the direct NDFD-minus-NBM forecast difference.
+            <b>NDFD:</b> archived lead-time verification is shown at the same 12/24/36/48/60-hour leads as NBM Deterministic.<br>
+            <b>NBM percentiles:</b> temporarily withheld from this exact-period chart because the operational QMD MinT percentile product uses an 18-hour minimum window, not the 0–12Z URMA TMIN window.<br>
+            <b>Important:</b> the lines show each source's MAE versus URMA TMIN; distance between NDFD and NBM is not the direct forecast-to-forecast difference.
           </div>
         </div>
       </div>
@@ -462,7 +463,7 @@ function ensureVerificationChartLibrary(){
 }
 function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
 async function loadVerificationData(){try{const r=await fetch('./data/verification.json?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const cwa=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const root=cwa&&cwa.scopes?(cwa.scopes[state.verifySpatialMode]||cwa.scopes.land):cwa;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
-function verifySourceOrder(){return['NDFD','NBM Deterministic','P10','P25','P50','P75','P90']}
+function verifySourceOrder(){return['NDFD','NBM Deterministic']}
 function verifySourceLabel(k){return k==='NBM Deterministic'?'NBM Det':k}
 async function renderVerification(){
   const data=state.verificationData,cwa=data&&data.cwas?data.cwas[state.verifyCwa]:null,
@@ -470,7 +471,8 @@ async function renderVerification(){
   const trendBtn=document.getElementById('verifyTrendView'),nightBtn=document.getElementById('verifyNightView'),dateCtl=document.getElementById('verifyDateControl');
   const sliderCtl=document.getElementById('verifyLeadSlider'),hasLeadArchive=!!(data&&data._hasLeadArchive);
   const scopeButtons=[...document.querySelectorAll('#verifyScopeButtons [data-verify-scope]')];
-  const availableScopes=cwa&&cwa.scopes?Object.keys(cwa.scopes):['land'];
+  const hasSpatialScopes=!!(cwa&&cwa.scopes);
+  const availableScopes=hasSpatialScopes?Object.keys(cwa.scopes):['land'];
   if(!availableScopes.includes(state.verifySpatialMode)){
     state.verifySpatialMode=availableScopes.includes('land')?'land':availableScopes[0];
   }
@@ -480,7 +482,7 @@ async function renderVerification(){
     btn.classList.toggle('active',btn.dataset.verifyScope===state.verifySpatialMode);
   });
   const scopeNote=document.getElementById('verifyScopeNote');
-  if(scopeNote)scopeNote.textContent=
+  if(scopeNote)scopeNote.textContent=!hasSpatialScopes?'Land sample only in the currently published dataset; spatial rebuild not yet available.':
     state.verifySpatialMode==='marine'?'Official NWS coastal marine-zone sample selected.':
     state.verifySpatialMode==='both'?'Combined land + coastal marine-zone sample selected.':
     'Land/county sample selected.';
@@ -512,13 +514,13 @@ async function renderVerification(){
 
   const selectedLead=(root.byLead||{})[String(state.verifyLeadHours)]||(state.verifyLeadHours===24?{dailyMae:root.dailyMae||{},dailyBias:root.dailyBias||{},ranking:root.ranking||[]}:{dailyMae:{},dailyBias:{},ranking:[]}),
         ranking=(selectedLead.ranking||[]).slice().sort((a,b)=>(a.mae??999)-(b.mae??999)),
-        pct=ranking.find(x=>/^P\d+/.test(x.source)),
+        pct=ranking.find(x=>x.source!=='NDFD'),
         ndfdSelected=(selectedLead.ranking||[]).find(x=>x.source==='NDFD'),
         validMae=ranking.map(r=>num(r.mae)).filter(isNum),
         bestMae=validMae.length?Math.min(...validMae):null,
         worstMae=validMae.length?Math.max(...validMae):null;
 
-  document.getElementById('verifyBestLabel').textContent=state.verifyMode==='trend'?'Best percentile · '+state.verifyLeadHours+'h':'Best percentile · selected night';
+  document.getElementById('verifyBestLabel').textContent=state.verifyMode==='trend'?'Best guidance · '+state.verifyLeadHours+'h':'Best guidance · selected night';
   document.getElementById('verifyBestMaeLabel').textContent=state.verifyMode==='trend'?'Best 5-night MAE':'Best selected-night MAE';
   document.getElementById('verifyNdfdMaeLabel').textContent='NDFD '+state.verifyLeadHours+'h MAE';
   document.getElementById('verifyBest').textContent=pct?pct.source:'—';
@@ -541,7 +543,7 @@ async function renderVerification(){
   let chartLabels=[],chartMae={},chartBias={},displayRanking=ranking,title='',note='';
   if(state.verifyMode==='trend'){
     chartLabels=dates.map(formatShortDate);chartMae=selectedLead.dailyMae||{};chartBias=selectedLead.dailyBias||{};
-    title='5-Day MAE vs RTMA · '+state.verifyLeadHours+' hr Lead';
+    title='5-Day MAE vs URMA TMIN · '+state.verifyLeadHours+' hr Lead';
     note=(!hasLeadArchive&&state.verifyLeadHours!==24)?('Archived F'+state.verifyLeadHours+' data have not been published yet. The control is working; this lead will populate when the historical NBM cycle build completes.'):'Each point is one verifying night at the selected forecast lead. Move the slider to compare F12/F24/F36/F48/F60.';
     document.getElementById('verifyRankingTitle').textContent='5-Day Ranking · '+state.verifyLeadHours+' hr';
   }else{
@@ -559,10 +561,10 @@ async function renderVerification(){
       return isNum(mae)?{source:src,mae,bias,samples:0}:null;
     }).filter(Boolean).sort((a,b)=>a.mae-b.mae);
     displayRanking=nightRows;
-    title='Forecast Evolution · '+formatDayLabel(night);
+    title='Forecast Evolution vs URMA TMIN · '+formatDayLabel(night);
     note='Left to right: 60h → 12h before verification. NDFD and NBM are both taken from the archived forecast available at each lead. Downward lines mean the forecast improved as the night approached. Ranking reflects the selected '+state.verifyLeadHours+'h lead.';
     document.getElementById('verifyRankingTitle').textContent='Selected Night · F'+state.verifyLeadHours+' Ranking';
-    const bestNight=nightRows.find(x=>/^P\d+/.test(x.source));
+    const bestNight=nightRows.find(x=>x.source!=='NDFD');
     document.getElementById('verifyBest').textContent=bestNight?bestNight.source:'—';
     document.getElementById('verifyBestMae').textContent=bestNight&&isNum(num(bestNight.mae))?num(bestNight.mae).toFixed(2)+'°F':'—';
   }
