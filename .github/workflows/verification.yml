@@ -53,14 +53,17 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path("site/data/verification.json").read_text())
-          assert p.get("schemaVersion") == 3, "verification.json is not lead-time schema v3"
+          assert p.get("schemaVersion") == 4, "verification.json is not spatial lead-time schema v4"
           for wfo, block in p.get("cwas", {}).items():
-              by_lead = block.get("byLead") or {}
-              for lead in ("12", "24", "36", "48", "60"):
-                  assert lead in by_lead, f"{wfo}: missing lead {lead}"
-                  ndfd = (by_lead.get(lead) or {}).get("dailyMae", {}).get("NDFD")
-                  assert isinstance(ndfd, list) and any(v is not None for v in ndfd), f"{wfo}: NDFD lead {lead} has no verification data"
-          print("Lead-time verification schema v3 validated, including NDFD history.")
+              scopes = block.get("scopes") or {}
+              assert "land" in scopes and "both" in scopes, f"{wfo}: missing land/both scopes"
+              for mode, scope in scopes.items():
+                  by_lead = scope.get("byLead") or {}
+                  for lead in ("12", "24", "36", "48", "60"):
+                      assert lead in by_lead, f"{wfo}/{mode}: missing lead {lead}"
+                      ndfd = (by_lead.get(lead) or {}).get("dailyMae", {}).get("NDFD")
+                      assert isinstance(ndfd, list) and any(v is not None for v in ndfd), f"{wfo}/{mode}: NDFD lead {lead} has no verification data"
+          print("Spatial lead-time schema v4 validated.")
           PY
 
       - name: Save verification JSON
