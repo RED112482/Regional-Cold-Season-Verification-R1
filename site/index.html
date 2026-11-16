@@ -177,7 +177,7 @@
       <div class="section"><div class="section-title">County Filter</div><div id="freqCwaChips" class="chips"></div><label class="toggle"><input id="showCounts" type="checkbox" checked> Show numeric county counts</label><label class="toggle"><input id="showStations" type="checkbox"> Show representative stations</label></div>
       <div class="section">
         <div class="section-title">Observation Exclusions</div>
-        <div class="small">Remove a bad station from Frequency calculations. Exclusions are saved on this browser until restored or cleared. County daily minima are recalculated immediately from the remaining in-county stations.</div>
+        <div class="small">Remove a bad station from Frequency calculations. Exclusions are saved on this browser until restored or cleared.</div>
         <div style="display:flex;gap:6px;margin-top:8px">
           <input id="freqExcludeInput" type="text" placeholder="Station ID (e.g. NLOF1)" autocomplete="off" style="min-width:0;flex:1;background:#111d28;border:1px solid #41566b;color:#e8f2fa;border-radius:6px;padding:7px 8px;font-family:Poppins,sans-serif">
           <button id="freqExcludeAdd" class="chip" type="button">EXCLUDE</button>
@@ -188,14 +188,14 @@
       <div class="section"><div class="section-title">Season Timeline</div>
         <div class="timeline-mode"><div class="timeline-date" style="margin-left:0">AS OF</div><div id="timelineDate" class="timeline-date">—</div></div>
         <input id="timelineSlider" class="timeline-slider" type="range" min="0" max="0" step="1" value="0">
-        <div class="timeline-nav"><button id="timelinePrevWeek">−7D</button><button id="timelinePrev">◀</button><button id="timelinePlay">PLAY</button><button id="timelineNext">▶</button><button id="timelineNextWeek">+7D</button><button id="timelineLatest">LATEST</button></div>
+        <div class="timeline-nav"><button id="timelinePrev">◀</button><button id="timelinePlay">PLAY</button><button id="timelineNext">▶</button></div>
         <div class="metric-switch">
           <div class="metric-switch-head"><span>Map View</span><strong id="freqMetricLabel">CUMULATIVE HITS</strong></div>
           <div class="period-toggle" style="margin-top:6px"><button id="freqCountView" class="period-btn active">CUMULATIVE HITS</button><button id="freqSinceView" class="period-btn">DAYS SINCE LAST HIT</button></div>
           <div id="lastHitNote" class="last-hit-note">Counts and recency are calculated through the selected date.</div>
         </div>
       </div>
-      <div class="section"><div class="section-title">Season Summary</div><div class="summary-grid"><div class="card"><span>Season</span><strong id="freqSeason">—</strong></div><div class="card"><span>Threshold</span><strong id="freqThreshold">—</strong></div><div class="card"><span id="freqMaxLabel">Highest county count</span><strong id="freqMax">—</strong></div><div class="card"><span id="freqCountiesLabel">Counties with ≥1</span><strong id="freqCounties">—</strong></div><div class="card"><span>County coverage</span><strong id="freqCoverage">—</strong></div></div></div>
+      <div class="section"><div class="section-title">Season Summary</div><div class="summary-grid"><div class="card"><span>Season</span><strong id="freqSeason">—</strong></div><div class="card"><span>Threshold</span><strong id="freqThreshold">—</strong></div><div class="card"><span id="freqMaxLabel">Highest county count</span><strong id="freqMax">—</strong></div><div class="card"><span id="freqCountiesLabel">Counties with ≥1</span><strong id="freqCounties">—</strong></div></div></div>
       <div id="warningBox1" class="warning"></div>
     </aside>
     <div class="map-wrap"><div id="frequencyMap" class="map"></div><div id="status1" class="status"></div></div>
@@ -302,7 +302,7 @@
     <div id="infoPanel" class="info-panel">
       <div class="info-content" data-info-content="counter">
         <h3>What the county number means</h3>
-        <p>Each number is the <b>number of Sep–May days</b> the selected threshold was reached. The coldest selected IEM observation in the county represents that day. Counties without an observation physically inside the county are treated as no-data; values are not borrowed from a neighboring county.</p>
+        <p>Each number is the <b>number of Sep–May days</b> the selected threshold was reached. The coldest selected IEM observation in the county represents that day. Counties with no station use the nearest regional station and are flagged when clicked.</p>
         <p>Frost Advisory verification uses the observed-condition PotFrost method from METAR T/Td, wind and cloud cover. Patchy (20) does not verify; Areas (40) or Widespread (70) does.</p>
       </div>
       <div class="info-content" data-info-content="criteria">
@@ -320,7 +320,7 @@
 <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
-const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',verifyMode:'trend',verifyLeadHours:24,verifyDateIndex:4,verifySpatialMode:'land',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,freqBaseCache:null,freqHitCache:null,freqRenderRaf:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
+const state={config:null,data:null,stationCatalog:null,forecastData:null,verificationData:null,verificationChart:null,cwopData:new Map(),primaryMetarSkySamples:[],verifyCwa:'MOB',verifyMode:'trend',verifyLeadHours:24,verifyDateIndex:4,verifySpatialMode:'land',forecastZonesGeoJson:null,forecastDynamicZones:null,tab:'frequency',frequencyMap:null,productsMap:null,forecastMap:null,frostMap:null,freqCountyLayer:null,freqLabelLayer:null,freqStationLayer:null,productLayer:null,verificationLayer:null,forecastCountyLayer:null,forecastLabelLayer:null,forecastContourLayer:null,forecastWmsLayer:null,forecastFieldLayer:null,frostFieldLayer:null,frostCountyLayer:null,frostLegendDiv:null,selectedMode:'freeze',threshold:32,cwaFilter:'MOB',productCwa:'MOB',forecastCwa:'MOB',forecastPeriod:'day1',frostCwa:'MOB',frostPeriod:'day1',forecastShowMint:true,forecastShowApt:false,forecastShowContours:false,forecastShowCounties:true,forecastCoverageThreshold:50,timelineMode:'total',timelineIndex:0,timelineTimer:null,verificationReloadTimer:null,events:[],selectedEvent:null,eventPointResults:[],eventGeoCache:new Map(),coopCache:new Map(),networkCache:new Map(),sourceCounts:{METAR:0,COOP:0,RWIS:0,USCRN:0},freqMetric:'count',freqExcludedStations:new Set(),forecastProducts:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning']),fallbackHazards:'',productTypes:new Set(['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'])};
 const PRODUCT_STYLE={
  'Frost Advisory':{color:'#6495ed'},'Freeze Watch':{color:'#00ffff'},'Freeze Warning':{color:'#483d8b'},'Cold Weather Advisory':{color:'#afeeee'},'Extreme Cold Watch':{color:'#5f9ea0'},'Extreme Cold Warning':{color:'#0000ff'},'Legacy Wind Chill':{color:'#8a6cff'},'Legacy Hard Freeze':{color:'#5540a5'}
 };
@@ -344,7 +344,7 @@ function createMaps(){state.frequencyMap=L.map('frequencyMap',{preferCanvas:true
 state.productsMap.createPane('hazardPane');state.productsMap.getPane('hazardPane').style.zIndex=410;
 state.productsMap.createPane('verificationPane');state.productsMap.getPane('verificationPane').style.zIndex=650;state.productsMap.getPane('verificationPane').style.pointerEvents='auto';
 state.freqLabelLayer=L.layerGroup().addTo(state.frequencyMap);state.freqStationLayer=L.layerGroup().addTo(state.frequencyMap);state.verificationLayer=L.layerGroup().addTo(state.productsMap);state.forecastLabelLayer=L.layerGroup().addTo(state.forecastMap);state.forecastContourLayer=L.layerGroup().addTo(state.forecastMap);addFrequencyLegend();addProductLegend();addForecastTempLegend();addFrostLegend();}
-function wire(){document.getElementById('loadBtn').addEventListener('click',loadSeason);document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));document.querySelectorAll('.preset').forEach(btn=>btn.addEventListener('click',()=>{state.selectedMode=btn.dataset.mode;document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x===btn));renderFrequency()}));document.getElementById('thresholdSlider').addEventListener('input',e=>{state.threshold=Number(e.target.value);document.getElementById('thresholdValue').textContent=state.threshold+'°F';state.selectedMode='custom';document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x.dataset.mode==='custom'));scheduleFrequencyRender()});document.getElementById('showCounts').addEventListener('change',renderFrequency);document.getElementById('showStations').addEventListener('change',renderFrequency);document.getElementById('freqExcludeAdd').addEventListener('click',addFrequencyExclusion);document.getElementById('freqExcludeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addFrequencyExclusion()}});document.getElementById('freqExcludeClear').addEventListener('click',clearFrequencyExclusions);document.getElementById('seasonSelect').addEventListener('change',loadSeason);document.getElementById('stationMode').addEventListener('change',loadSeason);document.getElementById('timelineSlider').addEventListener('input',e=>{state.timelineIndex=Number(e.target.value);updateTimelineDate();scheduleFrequencyRender()});document.getElementById('timelinePrevWeek').addEventListener('click',()=>stepTimeline(-7));document.getElementById('timelinePrev').addEventListener('click',()=>stepTimeline(-1));document.getElementById('timelineNext').addEventListener('click',()=>stepTimeline(1));document.getElementById('timelineNextWeek').addEventListener('click',()=>stepTimeline(7));document.getElementById('timelineLatest').addEventListener('click',()=>{if(!state.data?.dates?.length)return;state.timelineIndex=state.data.dates.length-1;document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();scheduleFrequencyRender()});document.getElementById('timelinePlay').addEventListener('click',toggleTimelinePlay);document.querySelectorAll('[data-forecast-period]').forEach(btn=>btn.addEventListener('click',()=>setForecastPeriod(btn.dataset.forecastPeriod)));document.querySelectorAll('[data-frost-period]').forEach(btn=>btn.addEventListener('click',()=>setFrostPeriod(btn.dataset.frostPeriod)));document.getElementById('showForecastMint').addEventListener('change',e=>{state.forecastShowMint=e.target.checked;if(e.target.checked){state.forecastShowApt=false;document.getElementById('showForecastApt').checked=false}renderForecast()});document.getElementById('showForecastApt').addEventListener('change',e=>{state.forecastShowApt=e.target.checked;if(e.target.checked){state.forecastShowMint=false;document.getElementById('showForecastMint').checked=false}renderForecast()});document.getElementById('showForecastCounties').addEventListener('change',e=>{state.forecastShowCounties=e.target.checked;renderForecast()});document.getElementById('forecastCoverageSlider').addEventListener('input',e=>{state.forecastCoverageThreshold=Number(e.target.value);document.getElementById('forecastCoverageValue').textContent=state.forecastCoverageThreshold+'%';renderForecast();});const scheduleVerificationReload=()=>{clearTimeout(state.verificationReloadTimer);state.verificationReloadTimer=setTimeout(()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)},180)};['showCoopSupplement','showRwisSupplement','showUscrnSupplement','showDcpSupplement','showCwopSupplement'].forEach(id=>document.getElementById(id).addEventListener('change',scheduleVerificationReload));
+function wire(){document.getElementById('loadBtn').addEventListener('click',loadSeason);document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));document.querySelectorAll('.preset').forEach(btn=>btn.addEventListener('click',()=>{state.selectedMode=btn.dataset.mode;document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x===btn));renderFrequency()}));document.getElementById('thresholdSlider').addEventListener('input',e=>{state.threshold=Number(e.target.value);document.getElementById('thresholdValue').textContent=state.threshold+'°F';state.selectedMode='custom';document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x.dataset.mode==='custom'));renderFrequency()});document.getElementById('showCounts').addEventListener('change',renderFrequency);document.getElementById('showStations').addEventListener('change',renderFrequency);document.getElementById('freqExcludeAdd').addEventListener('click',addFrequencyExclusion);document.getElementById('freqExcludeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addFrequencyExclusion()}});document.getElementById('freqExcludeClear').addEventListener('click',clearFrequencyExclusions);document.getElementById('seasonSelect').addEventListener('change',loadSeason);document.getElementById('stationMode').addEventListener('change',loadSeason);document.getElementById('timelineSlider').addEventListener('input',e=>{state.timelineIndex=Number(e.target.value);updateTimelineDate();renderFrequency()});document.getElementById('timelinePrev').addEventListener('click',()=>stepTimeline(-1));document.getElementById('timelineNext').addEventListener('click',()=>stepTimeline(1));document.getElementById('timelinePlay').addEventListener('click',toggleTimelinePlay);document.querySelectorAll('[data-forecast-period]').forEach(btn=>btn.addEventListener('click',()=>setForecastPeriod(btn.dataset.forecastPeriod)));document.querySelectorAll('[data-frost-period]').forEach(btn=>btn.addEventListener('click',()=>setFrostPeriod(btn.dataset.frostPeriod)));document.getElementById('showForecastMint').addEventListener('change',e=>{state.forecastShowMint=e.target.checked;if(e.target.checked){state.forecastShowApt=false;document.getElementById('showForecastApt').checked=false}renderForecast()});document.getElementById('showForecastApt').addEventListener('change',e=>{state.forecastShowApt=e.target.checked;if(e.target.checked){state.forecastShowMint=false;document.getElementById('showForecastMint').checked=false}renderForecast()});document.getElementById('showForecastCounties').addEventListener('change',e=>{state.forecastShowCounties=e.target.checked;renderForecast()});document.getElementById('forecastCoverageSlider').addEventListener('input',e=>{state.forecastCoverageThreshold=Number(e.target.value);document.getElementById('forecastCoverageValue').textContent=state.forecastCoverageThreshold+'%';renderForecast();});const scheduleVerificationReload=()=>{clearTimeout(state.verificationReloadTimer);state.verificationReloadTimer=setTimeout(()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)},180)};['showCoopSupplement','showRwisSupplement','showUscrnSupplement','showDcpSupplement','showCwopSupplement'].forEach(id=>document.getElementById(id).addEventListener('change',scheduleVerificationReload));
 document.getElementById('showVerificationLabels').addEventListener('change',()=>{if(state.selectedEvent)renderEventPointResults(state.selectedEvent,state.eventPointResults||[])});
 document.getElementById('showVerificationDuration').addEventListener('change',()=>{if(state.selectedEvent)loadEventPointVerification(state.selectedEvent)});document.getElementById('freqCountView').addEventListener('click',()=>setFrequencyMetric('count'));document.getElementById('freqSinceView').addEventListener('click',()=>setFrequencyMetric('since'));
 }
@@ -476,7 +476,6 @@ async function loadSeason(){
       normalizeFrequencyStationsStrict(data);
       await mergeCwopDailyIntoFrequency(data);
       state.data=data;
-      invalidateFrequencyCache();
       initializeTimeline();
       fitMaps();
       renderFrequency();
@@ -496,8 +495,8 @@ async function loadSeason(){
 function initializeTimeline(){if(!state.data)return;const slider=document.getElementById('timelineSlider');slider.max=Math.max(0,state.data.dates.length-1);state.timelineIndex=Math.max(0,state.data.dates.length-1);slider.value=state.timelineIndex;state.freqMetric='count';document.getElementById('freqMetricLabel').textContent='CUMULATIVE HITS';document.getElementById('freqCountView').classList.add('active');document.getElementById('freqSinceView').classList.remove('active');updateTimelineDate()}
 function setFrequencyMetric(metric){state.freqMetric=metric==='since'?'since':'count';document.getElementById('freqMetricLabel').textContent=state.freqMetric==='since'?'DAYS SINCE LAST HIT':'CUMULATIVE HITS';document.getElementById('freqCountView').classList.toggle('active',state.freqMetric==='count');document.getElementById('freqSinceView').classList.toggle('active',state.freqMetric==='since');renderFrequency()}
 function updateTimelineDate(){const el=document.getElementById('timelineDate');if(!state.data||!state.data.dates.length){el.textContent='—';return}el.textContent=formatDayLabel(state.data.dates[state.timelineIndex])}
-function stepTimeline(delta){if(!state.data||!state.data.dates.length)return;state.timelineIndex=Math.max(0,Math.min(state.data.dates.length-1,state.timelineIndex+delta));document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();scheduleFrequencyRender()}
-function toggleTimelinePlay(){const btn=document.getElementById('timelinePlay');if(state.timelineTimer){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}btn.textContent='PAUSE';state.timelineTimer=setInterval(()=>{if(!state.data)return;if(state.timelineIndex>=state.data.dates.length-1){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}state.timelineIndex++;document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();scheduleFrequencyRender()},350)}
+function stepTimeline(delta){if(!state.data||!state.data.dates.length)return;state.timelineIndex=Math.max(0,Math.min(state.data.dates.length-1,state.timelineIndex+delta));document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();renderFrequency()}
+function toggleTimelinePlay(){const btn=document.getElementById('timelinePlay');if(state.timelineTimer){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}btn.textContent='PAUSE';state.timelineTimer=setInterval(()=>{if(!state.data)return;if(state.timelineIndex>=state.data.dates.length-1){clearInterval(state.timelineTimer);state.timelineTimer=null;btn.textContent='PLAY';return}state.timelineIndex++;document.getElementById('timelineSlider').value=state.timelineIndex;updateTimelineDate();renderFrequency()},500)}
 function formatDayLabel(s){if(!s)return'—';const d=new Date(s+'T12:00:00Z');return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(d)}
 function formatShortDate(s){if(!s)return'—';const d=new Date(s+'T12:00:00Z');return new Intl.DateTimeFormat('en-US',{month:'short',day:'2-digit',timeZone:'UTC'}).format(d)}
 function fitMaps(){if(!state.data||!state.data.countiesGeoJson)return;fitMapToCwa(state.frequencyMap,state.cwaFilter);fitMapToCwa(state.productsMap,state.productCwa);fitMapToCwa(state.forecastMap,state.forecastCwa);fitMapToCwa(state.frostMap,state.frostCwa)}
@@ -515,14 +514,9 @@ function loadFrequencyExclusions(){
   state.freqExcludedStations=new Set(ids.map(normalizeStationId).filter(Boolean));
   setTimeout(renderFrequencyExclusionList,0);
 }
-function invalidateFrequencyCache(){
-  state.freqBaseCache=null;
-  state.freqHitCache=null;
-}
 function saveFrequencyExclusions(){
   try{localStorage.setItem(FREQ_EXCLUSION_KEY,JSON.stringify([...state.freqExcludedStations].sort()))}catch(e){}
   renderFrequencyExclusionList();
-  invalidateFrequencyCache();
   if(state.data)renderFrequency();
 }
 function isFrequencyStationExcluded(st){
@@ -550,207 +544,41 @@ function renderFrequencyExclusionList(){
   el.innerHTML=ids.length?ids.map(id=>'<button class="chip" type="button" title="Restore '+esc(id)+'" data-restore-station="'+esc(id)+'">'+esc(id)+' ×</button>').join(''):'<span class="small">No stations excluded.</span>';
   el.querySelectorAll('[data-restore-station]').forEach(b=>b.addEventListener('click',()=>restoreFrequencyStation(b.dataset.restoreStation)));
 }
-function frequencyCacheSignature(){
-  const exclusions=[...(state.freqExcludedStations||[])].sort().join(',');
-  return String(state.data?.season?.label||'')+'|'+String(state.data?.dates?.length||0)+'|'+exclusions;
-}
-function ensureFrequencyBaseCache(){
-  if(!state.data)return null;
-  const signature=frequencyCacheSignature();
-  if(state.freqBaseCache&&state.freqBaseCache.signature===signature)return state.freqBaseCache;
-  const dates=state.data.dates||[],featureByFips=new Map();
-  for(const f of (state.data.countiesGeoJson?.features||[])){
-    featureByFips.set(String((f.properties||{}).fips||'').padStart(5,'0'),f);
-  }
-  const counties=new Map();
-  for(const row of Object.values(state.data.countyStats||{})){
-    const fips=String(row.fips||'').padStart(5,'0'),feature=featureByFips.get(fips)||null;
-    const stations=(row.stationDaily||[]).filter(st=>
-      !isFrequencyStationExcluded(st)&&feature&&isNum(num(st.lon))&&isNum(num(st.lat))&&pointInFeature(num(st.lon),num(st.lat),feature)
-    );
-    const temp=Array(dates.length).fill(null),feel=Array(dates.length).fill(null);
-    for(const st of stations){
-      const tt=st.dailyMinTemp||[],ff=st.dailyMinFeel||[];
-      for(let i=0;i<dates.length;i++){
-        const t=saneAirTempF(tt[i]),a=saneApparentF(ff[i]);
-        if(isNum(t))temp[i]=temp[i]===null?t:Math.min(temp[i],t);
-        if(isNum(a))feel[i]=feel[i]===null?a:Math.min(feel[i],a);
-      }
-    }
-    counties.set(fips,{feature,stations,temp,feel});
-  }
-  state.freqBaseCache={signature,featureByFips,counties};
-  state.freqHitCache=null;
-  return state.freqBaseCache;
-}
 function frequencyCountyFeature(s){
-  const cache=ensureFrequencyBaseCache();
-  return cache?.featureByFips.get(String(s.fips||'').padStart(5,'0'))||null;
+  return (state.data?.countiesGeoJson?.features||[]).find(f=>String((f.properties||{}).fips||'').padStart(5,'0')===String(s.fips||'').padStart(5,'0'))||null;
 }
 function activeFrequencyStations(s){
-  const cache=ensureFrequencyBaseCache();
-  return cache?.counties.get(String(s.fips||'').padStart(5,'0'))?.stations||[];
+  const feature=frequencyCountyFeature(s);
+  return (s.stationDaily||[]).filter(st=>!isFrequencyStationExcluded(st)&&feature&&isNum(num(st.lon))&&isNum(num(st.lat))&&pointInFeature(num(st.lon),num(st.lat),feature));
 }
 function countyStationValuesAtIndex(s,i){
-  const cache=ensureFrequencyBaseCache(),row=cache?.counties.get(String(s.fips||'').padStart(5,'0'));
-  return{temp:row?.temp?.[i]??null,feel:row?.feel?.[i]??null};
+  const temps=[],feels=[];
+  for(const st of activeFrequencyStations(s)){
+    const t=saneAirTempF((st.dailyMinTemp||[])[i]),f=saneApparentF((st.dailyMinFeel||[])[i]);
+    if(isNum(t))temps.push(t);
+    if(isNum(f))feels.push(f);
+  }
+  return{temp:temps.length?Math.min(...temps):null,feel:feels.length?Math.min(...feels):null};
 }
 function countySeriesThrough(s,maxIndex,kind){
-  const cache=ensureFrequencyBaseCache(),row=cache?.counties.get(String(s.fips||'').padStart(5,'0'));
-  const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
-  return ((kind==='feel'?row?.feel:row?.temp)||[]).slice(0,end+1);
-}
-function frequencyHitKey(){
-  return frequencyCacheSignature()+'|'+state.selectedMode+'|'+state.threshold;
-}
-function ensureFrequencyHitCache(){
-  const base=ensureFrequencyBaseCache();
-  if(!base)return null;
-  const key=frequencyHitKey();
-  if(state.freqHitCache&&state.freqHitCache.key===key)return state.freqHitCache;
-  const dates=state.data.dates||[],counties=new Map();
-  for(const s of Object.values(state.data.countyStats||{})){
-    const fips=String(s.fips||'').padStart(5,'0'),raw=base.counties.get(fips)||{temp:[],feel:[]};
-    const hits=Array(dates.length).fill(false),cumulative=Array(dates.length).fill(0),lastHit=Array(dates.length).fill(null);
-    let count=0,last=null;
-    for(let i=0;i<dates.length;i++){
-      const t=raw.temp[i]??null,f=raw.feel[i]??null,a=minFinite(t,f);
-      let hit=false;
-      if(state.selectedMode==='custom')hit=isNum(t)&&t<=state.threshold;
-      else if(state.selectedMode==='frost')hit=isNum(t)&&t<=37;
-      else if(state.selectedMode==='freeze')hit=isNum(t)&&t<=32;
-      else if(state.selectedMode==='hardfreeze')hit=isNum(t)&&t<=25;
-      else if(state.selectedMode==='cwa')hit=isNum(a)&&isNum(s.criteria?.coldAdvisory)&&a<=s.criteria.coldAdvisory;
-      else if(state.selectedMode==='ecw')hit=isNum(a)&&isNum(s.criteria?.extremeCold)&&a<=s.criteria.extremeCold;
-      hits[i]=hit;
-      if(hit){count++;last=i}
-      cumulative[i]=count;
-      lastHit[i]=last;
-    }
-    counties.set(fips,{hits,cumulative,lastHit});
-  }
-  state.freqHitCache={key,counties};
-  return state.freqHitCache;
-}
-function countForCountyThrough(s,maxIndex){
-  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0'));
-  const i=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
-  return row?.cumulative?.[i]??0;
-}
-function countForCounty(s){return countForCountyThrough(s,state.timelineIndex)}
-function hitDatesThrough(s,maxIndex){
-  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0')),out=[];
-  const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
-  for(let i=0;i<=end;i++)if(row?.hits?.[i])out.push(state.data.dates[i]);
+  const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1)),out=[];
+  for(let i=0;i<=end;i++){const v=countyStationValuesAtIndex(s,i);out.push(kind==='feel'?v.feel:v.temp)}
   return out;
 }
+function renderFrequency(){if(!state.data)return;if(state.freqCountyLayer)state.frequencyMap.removeLayer(state.freqCountyLayer);state.freqLabelLayer.clearLayers();state.freqStationLayer.clearLayers();const idx=Math.max(0,Math.min(state.timelineIndex,state.data.dates.length-1)),metric=state.freqMetric,visible=Object.values(state.data.countyStats).filter(s=>cwaVisible(s.wfo)),metricValues=[];state.freqCountyLayer=L.geoJSON(state.data.countiesGeoJson,{style:f=>{const s=state.data.countyStats[String(f.properties.fips).padStart(5,'0')];if(!s||!cwaVisible(s.wfo))return{color:'#33485e',weight:.5,fillOpacity:.03,fillColor:'#13202d'};if(metric==='since'){const age=daysSinceLastHit(s,idx);if(age!==null)metricValues.push(age);return{color:age===null?'#596979':'#c8f5ff',weight:age===0?1.6:.8,fillColor:daysSinceColor(age),fillOpacity:age===null?.18:.76}}const c=countForCountyThrough(s,idx);metricValues.push(c);return{color:'#8fa6bd',weight:.7,fillColor:countColor(c),fillOpacity:.72}},onEachFeature:(f,l)=>{const s=state.data.countyStats[String(f.properties.fips).padStart(5,'0')];if(!s)return;if(metric==='since'){const age=daysSinceLastHit(s,idx),last=lastHitDateThrough(s,idx);l.bindTooltip((s.county||'')+', '+s.state+' · '+(age===null?'Not met':age===0?'Hit today':age+' days since')+(last?' · '+last:''),{sticky:true,className:'county-tip'})}else l.bindTooltip((s.county||'')+', '+s.state+' · '+countForCountyThrough(s,idx)+' hits through '+state.data.dates[idx],{sticky:true,className:'county-tip'});l.bindPopup(()=>countyPopup(s))}}).addTo(state.frequencyMap);
+if(document.getElementById('showCounts').checked){visible.forEach(s=>{if(!Number.isFinite(s.lat)||!Number.isFinite(s.lon))return;let label;if(metric==='since'){const age=daysSinceLastHit(s,idx);label=age===null?'—':String(age)}else label=String(countForCountyThrough(s,idx));const dateLabel=formatShortDate(state.data.dates[idx]);L.marker([s.lat,s.lon],{interactive:false,icon:L.divIcon({className:'county-label',html:'<div class="county-count-wrap"><div class="county-count-main">'+label+'</div><div class="county-count-date">('+dateLabel+')</div></div>',iconSize:[56,28],iconAnchor:[28,14]})}).addTo(state.freqLabelLayer)})}
+if(document.getElementById('showStations').checked){visible.forEach(s=>(s.stations||[]).filter(st=>!isFrequencyStationExcluded(st)).forEach(st=>L.circleMarker([st.lat,st.lon],{radius:3,color:'#06101a',weight:1,fillColor:'#d8f7ff',fillOpacity:.95}).bindTooltip(st.id+' · '+st.name).addTo(state.freqStationLayer)))}
+document.getElementById('freqSeason').textContent=state.data.season.label;document.getElementById('freqThreshold').textContent=modeLabel();if(metric==='since'){const ages=visible.map(s=>daysSinceLastHit(s,idx)),met=ages.filter(v=>v!==null);document.getElementById('freqMaxLabel').textContent='Longest since last hit';document.getElementById('freqCountiesLabel').textContent='Counties met this season';document.getElementById('freqMax').textContent=met.length?Math.max(...met)+' d':'—';document.getElementById('freqCounties').textContent=met.length;document.getElementById('thresholdDescription').textContent='As of '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();document.getElementById('lastHitNote').innerHTML='<b>Map:</b> number of days since each county last met the selected threshold. “Not met” means no hit yet this season.'}else{const counts=visible.map(s=>countForCountyThrough(s,idx));document.getElementById('freqMaxLabel').textContent='Highest cumulative count';document.getElementById('freqCountiesLabel').textContent='Counties with ≥1 hit';document.getElementById('freqMax').textContent=counts.length?Math.max(...counts):'—';document.getElementById('freqCounties').textContent=counts.filter(v=>v>0).length;document.getElementById('thresholdDescription').textContent='Through '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();document.getElementById('lastHitNote').innerHTML='<b>Map:</b> cumulative number of threshold hits from Sep 1 through the selected date.'}updateTimelineDate();updateFrequencyLegend()}
+function cwaVisible(wfo){return state.cwaFilter==='ALL'||wfo===state.cwaFilter}
+function countForCountyThrough(s,maxIndex){let count=0;const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));for(let i=0;i<=end;i++)if(hitForCountyIndex(s,i))count++;return count}
+function countForCounty(s){return countForCountyThrough(s,state.timelineIndex)}
+function hitDatesThrough(s,maxIndex){const out=[],end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));for(let i=0;i<=end;i++)if(hitForCountyIndex(s,i))out.push(state.data.dates[i]);return out}
 function hitDates(s){return hitDatesThrough(s,state.timelineIndex)}
-function lastHitIndexThrough(s,maxIndex){
-  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0'));
-  const i=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));
-  return row?.lastHit?.[i]??null;
-}
+function lastHitIndexThrough(s,maxIndex){const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));for(let i=end;i>=0;i--)if(hitForCountyIndex(s,i))return i;return null}
 function daysSinceLastHit(s,maxIndex){const last=lastHitIndexThrough(s,maxIndex);return last===null?null:Math.max(0,maxIndex-last)}
 function lastHitDateThrough(s,maxIndex){const last=lastHitIndexThrough(s,maxIndex);return last===null?'':state.data.dates[last]}
 function valueForCountyIndex(s,i){const v=countyStationValuesAtIndex(s,i),t=v.temp,f=v.feel;return(state.selectedMode==='cwa'||state.selectedMode==='ecw')?minFinite(t,f):t}
-function hitForCountyIndex(s,i){
-  const row=ensureFrequencyHitCache()?.counties.get(String(s.fips||'').padStart(5,'0'));
-  return !!row?.hits?.[i];
-}
-function renderFrequency(){
-  if(!state.data)return;
-  ensureFrequencyBaseCache();
-  ensureFrequencyHitCache();
-
-  if(state.freqCountyLayer)state.frequencyMap.removeLayer(state.freqCountyLayer);
-  state.freqLabelLayer.clearLayers();
-  state.freqStationLayer.clearLayers();
-
-  const idx=Math.max(0,Math.min(state.timelineIndex,state.data.dates.length-1)),
-        metric=state.freqMetric,
-        visible=Object.values(state.data.countyStats).filter(row=>cwaVisible(row.wfo));
-
-  state.freqCountyLayer=L.geoJSON(state.data.countiesGeoJson,{
-    style:f=>{
-      const row=state.data.countyStats[String((f.properties||{}).fips||'').padStart(5,'0')];
-      if(!row||!cwaVisible(row.wfo))return{color:'#33485e',weight:.5,fillOpacity:.03,fillColor:'#13202d'};
-      if(metric==='since'){
-        const age=daysSinceLastHit(row,idx);
-        return{color:age===null?'#596979':'#c8f5ff',weight:age===0?1.6:.8,fillColor:daysSinceColor(age),fillOpacity:age===null?.18:.76};
-      }
-      const count=countForCountyThrough(row,idx);
-      return{color:'#8fa6bd',weight:.7,fillColor:countColor(count),fillOpacity:.72};
-    },
-    onEachFeature:(f,layer)=>{
-      const row=state.data.countyStats[String((f.properties||{}).fips||'').padStart(5,'0')];
-      if(!row)return;
-      if(metric==='since'){
-        const age=daysSinceLastHit(row,idx),last=lastHitDateThrough(row,idx);
-        layer.bindTooltip((row.county||'')+', '+row.state+' · '+(age===null?'Not met':age===0?'Hit today':age+' days since')+(last?' · '+last:''),{sticky:true,className:'county-tip'});
-      }else{
-        layer.bindTooltip((row.county||'')+', '+row.state+' · '+countForCountyThrough(row,idx)+' hits through '+state.data.dates[idx],{sticky:true,className:'county-tip'});
-      }
-      layer.bindPopup(()=>countyPopup(row));
-    }
-  }).addTo(state.frequencyMap);
-
-  if(document.getElementById('showCounts').checked){
-    const dateLabel=formatShortDate(state.data.dates[idx]);
-    visible.forEach(row=>{
-      if(!Number.isFinite(row.lat)||!Number.isFinite(row.lon))return;
-      const value=metric==='since'?daysSinceLastHit(row,idx):countForCountyThrough(row,idx);
-      const label=metric==='since'?(value===null?'—':String(value)):String(value);
-      L.marker([row.lat,row.lon],{
-        interactive:false,
-        icon:L.divIcon({
-          className:'county-label',
-          html:'<div class="county-count-wrap"><div class="county-count-main">'+label+'</div><div class="county-count-date">('+dateLabel+')</div></div>',
-          iconSize:[56,28],iconAnchor:[28,14]
-        })
-      }).addTo(state.freqLabelLayer);
-    });
-  }
-
-  if(document.getElementById('showStations').checked){
-    visible.forEach(row=>activeFrequencyStations(row).forEach(st=>{
-      L.circleMarker([st.lat,st.lon],{radius:3,color:'#06101a',weight:1,fillColor:'#d8f7ff',fillOpacity:.95})
-        .bindTooltip((st.id||st.obs||'')+' · '+(st.name||''))
-        .addTo(state.freqStationLayer);
-    }));
-  }
-
-  document.getElementById('freqSeason').textContent=state.data.season.label;
-  document.getElementById('freqThreshold').textContent=modeLabel();
-  const covered=visible.filter(row=>activeFrequencyStations(row).length>0).length;
-  const coverageEl=document.getElementById('freqCoverage');
-  if(coverageEl)coverageEl.textContent=covered+'/'+visible.length;
-
-  if(metric==='since'){
-    const ages=visible.map(row=>daysSinceLastHit(row,idx)),met=ages.filter(v=>v!==null);
-    document.getElementById('freqMaxLabel').textContent='Longest since last hit';
-    document.getElementById('freqCountiesLabel').textContent='Counties met this season';
-    document.getElementById('freqMax').textContent=met.length?Math.max(...met)+' d':'—';
-    document.getElementById('freqCounties').textContent=met.length;
-    document.getElementById('thresholdDescription').textContent='As of '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();
-    document.getElementById('lastHitNote').innerHTML='<b>Map:</b> number of days since each county last met the selected threshold. “Not met” means no hit yet this season.';
-  }else{
-    const counts=visible.map(row=>countForCountyThrough(row,idx));
-    document.getElementById('freqMaxLabel').textContent='Highest cumulative count';
-    document.getElementById('freqCountiesLabel').textContent='Counties with ≥1 hit';
-    document.getElementById('freqMax').textContent=counts.length?Math.max(...counts):'—';
-    document.getElementById('freqCounties').textContent=counts.filter(v=>v>0).length;
-    document.getElementById('thresholdDescription').textContent='Through '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();
-    document.getElementById('lastHitNote').innerHTML='<b>Map:</b> cumulative number of threshold hits from Sep 1 through the selected date.';
-  }
-  updateTimelineDate();
-  updateFrequencyLegend();
-}
-
-function scheduleFrequencyRender(){
-  if(state.freqRenderRaf)cancelAnimationFrame(state.freqRenderRaf);
-  state.freqRenderRaf=requestAnimationFrame(()=>{state.freqRenderRaf=null;renderFrequency()});
-}
-
+function hitForCountyIndex(s,i){const v=countyStationValuesAtIndex(s,i),t=v.temp,f=v.feel,a=minFinite(t,f);if(state.selectedMode==='custom')return isNum(t)&&t<=state.threshold;if(state.selectedMode==='frost')return isNum(t)&&t<=37;if(state.selectedMode==='freeze')return isNum(t)&&t<=32;if(state.selectedMode==='hardfreeze')return isNum(t)&&t<=25;if(state.selectedMode==='cwa')return isNum(a)&&isNum(s.criteria.coldAdvisory)&&a<=s.criteria.coldAdvisory;if(state.selectedMode==='ecw')return isNum(a)&&isNum(s.criteria.extremeCold)&&a<=s.criteria.extremeCold;return false}
 function daysSinceColor(age){if(age===null)return'#1a2632';if(age===0)return'#19e6ff';if(age<=2)return'#22c8cf';if(age<=5)return'#42b883';if(age<=10)return'#a4b84a';if(age<=20)return'#d39d3f';if(age<=40)return'#d06d4e';return'#a44f86'}
 function countColor(c){if(c<=0)return'#172534';if(c===1)return'#386c83';if(c<=3)return'#2a9db8';if(c<=6)return'#287bd1';if(c<=10)return'#4c5bdc';if(c<=15)return'#7750d7';return'#a83fc4'}
 function modeLabel(){if(state.selectedMode==='custom')return'≤'+state.threshold+'°F';if(state.selectedMode==='frost')return'Frost ≤37°';if(state.selectedMode==='freeze')return'Freeze ≤32°';if(state.selectedMode==='hardfreeze')return'Hard freeze ≤25°';if(state.selectedMode==='cwa')return'Cold Advisory';return'Extreme Cold'}
