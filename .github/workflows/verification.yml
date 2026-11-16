@@ -40,6 +40,20 @@ jobs:
       - name: Build rolling 5-day MinT verification (NDFD archive + RTMA)
         run: python scripts/build_verification.py
 
+      - name: Validate lead-time verification schema
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("site/data/verification.json").read_text())
+          assert p.get("schemaVersion") == 2, "verification.json is not lead-time schema v2"
+          for wfo, block in p.get("cwas", {}).items():
+              by_lead = block.get("byLead") or {}
+              for lead in ("12", "24", "36", "48", "60"):
+                  assert lead in by_lead, f"{wfo}: missing lead {lead}"
+          print("Lead-time verification schema validated.")
+          PY
+
       - name: Save verification JSON
         shell: bash
         run: |
