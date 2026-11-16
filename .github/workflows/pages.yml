@@ -40,7 +40,7 @@ permissions:
 
 concurrency:
   group: "github-pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-data:
@@ -120,6 +120,15 @@ jobs:
             git commit -m "Update generated cold-season data"
             git push origin HEAD:main
           fi
+
+      - name: Refresh site from latest main before Pages upload
+        shell: bash
+        run: |
+          # Verification/forecast workflows may finish while this longer build
+          # is running. Re-sync immediately before creating the Pages artifact
+          # so an older run can never overwrite newer site/data files.
+          git fetch origin main
+          git reset --hard origin/main
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
