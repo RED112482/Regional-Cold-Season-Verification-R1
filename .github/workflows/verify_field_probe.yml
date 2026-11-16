@@ -54,20 +54,12 @@ jobs:
               finally:
                   os.unlink(path)
 
-          print("\n=== NBM core/qmd files + MinT records ===")
+          print("\n=== NBM QMD F024 index sample ===")
           b="noaa-nbm-grib2-pds"
-          for sub in ("core","qmd"):
-              pref=f"blend.20261115/12/{sub}/"
-              r=s3.list_objects_v2(Bucket=b,Prefix=pref,MaxKeys=1000)
-              keys=[o["Key"] for o in r.get("Contents",[]) if "f024" in o["Key"] and not o["Key"].endswith(".idx")]
-              print("\n",sub,keys[:20])
-              for k in keys[:8]:
-                  try:
-                      lines=get_idx(b,k)
-                  except Exception as e:
-                      print("NO IDX",k,e);continue
-                  hits=[line for line in lines if ("TMIN" in line.upper()) or ("TMP" in line.upper() and "MIN" in line.upper())]
-                  if hits:
-                      print("KEY",k)
-                      for line in hits: print(line)
+          k="blend.20261115/12/qmd/blend.t12z.qmd.f024.co.grib2"
+          lines=get_idx(b,k)
+          for line in lines:
+              up=line.upper()
+              if any(tok in up for tok in ("TMP","TMIN","PERCENT","10%","25%","50%","75%","90%")):
+                  print(line)
           PY
