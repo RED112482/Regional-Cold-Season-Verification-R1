@@ -450,7 +450,7 @@ function ensureVerificationChartLibrary(){
   return verificationChartLoadPromise;
 }
 function buildVerifyCwaChips(){const el=document.getElementById('verifyCwaChips');if(!el)return;el.innerHTML=(state.config.wfos||[]).map(c=>'<button class="chip '+(c===state.verifyCwa?'active':'')+'" data-verify-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.verifyCwa=b.dataset.verifyCwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderVerification()}))}
-async function loadVerificationData(){try{const r=await fetch('./data/verification.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const root=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
+async function loadVerificationData(){try{const r=await fetch('./data/verification.json?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const payload=await r.json();const root=payload&&payload.cwas?payload.cwas[state.verifyCwa]:null;const required=['12','24','36','48','60'];const hasLeadArchive=!!(root&&root.byLead&&required.every(h=>root.byLead[h]));payload._hasLeadArchive=hasLeadArchive;state.verificationData=payload;if(root){state.verifyLeadHours=hasLeadArchive?Number(root.defaultLeadHours||payload.defaultLeadHours||24):24;state.verifyDateIndex=Math.max(0,(root.dates||[]).length-1)}renderVerification()}catch(e){state.verificationData=null;const u=document.getElementById('verifyUpdated');if(u)u.textContent='Verification dataset unavailable: '+err(e);const rank=document.getElementById('verifyRanking');if(rank)rank.innerHTML='<div class="small">'+esc(err(e))+'</div>';}}
 function verifySourceOrder(){return['NDFD','NBM Deterministic','P10','P25','P50','P75','P90']}
 function verifySourceLabel(k){return k==='NBM Deterministic'?'NBM Det':k}
 async function renderVerification(){
@@ -497,7 +497,12 @@ async function renderVerification(){
   document.getElementById('verifyBest').textContent=pct?pct.source:'—';
   document.getElementById('verifyBestMae').textContent=pct&&isNum(num(pct.mae))?num(pct.mae).toFixed(2)+'°F':'—';
   document.getElementById('verifyNdfdMae').textContent=ndfdSelected&&isNum(num(ndfdSelected.mae))?num(ndfdSelected.mae).toFixed(2)+'°F':'—';
-  document.getElementById('verifyUpdated').textContent=(!hasLeadArchive?'Archived lead-time build in progress · controls remain available · ':'Last '+dates.length+' completed nights · ')+ 'Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
+  {
+    const ndfdLeadCount=leads.filter(h=>Array.isArray((((root.byLead||{})[String(h)]||{}).dailyMae||{}).NDFD)&&((((root.byLead||{})[String(h)]||{}).dailyMae||{}).NDFD).some(v=>isNum(num(v)))).length;
+    document.getElementById('verifyUpdated').textContent=
+      (!hasLeadArchive?'Archived lead-time build in progress · controls remain available · ':'Last '+dates.length+' completed nights · ')+
+      'NDFD '+ndfdLeadCount+'/'+leads.length+' leads loaded · Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
+  }
 
   function perfColor(mae,alpha=1){
     if(!isNum(mae)||!isNum(bestMae)||!isNum(worstMae)||worstMae===bestMae)return 'rgba(40,209,124,'+alpha+')';
@@ -549,9 +554,10 @@ async function renderVerification(){
 
   const order=verifySourceOrder(),rankMap=new Map(displayRanking.map(r=>[r.source,r]));
   const datasets=order.filter(k=>Array.isArray(chartMae[k])&&chartMae[k].some(v=>isNum(num(v)))).map(k=>{
-    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',c=perfColor(isNum(m)?m:(bestMae??0),1);
-    const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?7:3.5):(ndfdLine?5.5:4);
-    return{label:verifySourceLabel(k)+(ndfdLine?' ★':''),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?8:6,borderWidth:ndfdLine?5:3.2,borderColor:c,backgroundColor:c,pointBackgroundColor:c,pointBorderColor:ndfdLine?'rgba(220,250,255,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?2.4:1.4};
+    const summary=rankMap.get(k)||{},m=num(summary.mae),ndfdLine=k==='NDFD',
+          c=ndfdLine?'rgba(75,220,255,1)':perfColor(isNum(m)?m:(bestMae??0),1);
+    const radii=state.verifyMode==='night'?chartLabels.map(lbl=>Number(String(lbl).replace('h',''))===state.verifyLeadHours?(ndfdLine?8:7):(ndfdLine?5:3.5)):(ndfdLine?6:4);
+    return{label:verifySourceLabel(k)+(ndfdLine?' ★ OFFICIAL NDFD':''),data:chartMae[k],_bias:chartBias[k]||[],tension:.25,spanGaps:true,pointRadius:radii,pointHoverRadius:ndfdLine?9:6,borderWidth:ndfdLine?6:3.2,borderDash:ndfdLine?[]:undefined,borderColor:c,backgroundColor:c,pointBackgroundColor:c,pointBorderColor:ndfdLine?'rgba(245,255,255,1)':'rgba(10,20,30,.85)',pointBorderWidth:ndfdLine?2.8:1.4,order:ndfdLine?0:1};
   });
 
   const canvas=document.getElementById('verificationChart');
