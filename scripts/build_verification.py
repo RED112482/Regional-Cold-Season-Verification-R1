@@ -19,6 +19,8 @@ import math
 import os
 import subprocess
 import tempfile
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -99,6 +101,66 @@ def cwa_geometries():
 
 def inside_cwa(lon, lat, geoms):
     return any(point_in_geom(lon, lat, g) for g in geoms)
+
+
+MARINE_ZONES_URL = "https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/FeatureServer/5/query"
+
+
+def marine_geometries():
+    """Fetch official NWS coastal marine-zone polygons for supported WFOs."""
+    where = "wfo IN (" + ",".join(f"'{w}'" for w in WFO_IDS) + ")"
+    params = {
+        "where": where,
+        "outFields": "wfo,name,id",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "geojson",
+    }
+    req = Request(
+        MARINE_ZONES_URL + "?" + urlencode(params),
+        headers={"User-Agent": "Regional-Cold-Season-Verification/1.0"},
+    )
+    with urlopen(req, timeout=90) as resp:
+        payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+    out = {w: [] for w in WFO_IDS}
+    for feat in payload.get("features", []):
+        props = feat.get("properties") or {}
+        wfo = str(props.get("wfo") or props.get("WFO") or "").upper()
+        if wfo in out:
+            out[wfo].append(feat.get("geometry") or {})
+    return out
+
+
+def regular_points_in_geoms(geoms, spacing=0.12, max_points=220):
+    """Build a compact, reproducible over-water sample from marine polygons."""
+    pts = []
+    seen = set()
+    for geom in geoms or []:
+        coords = geom.get("coordinates") or []
+        flat = []
+        def walk(x):
+            if isinstance(x, list) and len(x) >= 2 and isinstance(x[0], (int, float)) and isinstance(x[1], (int, float)):
+                flat.append((float(x[0]), float(x[1])))
+            elif isinstance(x, list):
+                for item in x:
+                    walk(item)
+        walk(coords)
+        if not flat:
+            continue
+        xmin=min(x for x,_ in flat); xmax=max(x for x,_ in flat)
+        ymin=min(y for _,y in flat); ymax=max(y for _,y in flat)
+        lat=ymin + spacing/2
+        while lat <= ymax and len(pts) < max_points:
+            lon=xmin + spacing/2
+            while lon <= xmax and len(pts) < max_points:
+                if point_in_geom(lon, lat, geom):
+                    key=(round(lat,4),round(lon,4))
+                    if key not in seen:
+                        seen.add(key)
+                        pts.append((lat,lon,None))
+                lon += spacing
+            lat += spacing
+    return pts
 
 
 def historical_forecast_snapshot(issue_day):
@@ -640,6 +702,11 @@ def main():
         return
 
     geoms = cwa_geometries()
+    try:
+        marine_geoms = marine_geometries()
+    except Exception as exc:
+        marine_geoms = {w: [] for w in WFO_IDS}
+        print(f"WARNING: marine-zone geometry unavailable: {exc}")
     now = datetime.now(timezone.utc)
     latest = now.date()
     if now.hour < 14:
@@ -649,7 +716,8 @@ def main():
 
     # daily[wfo][valid-date] contains a byLead dictionary. Archived NDFD and
     # NBM deterministic/percentiles are retained at every requested lead.
-    daily = {w: {} for w in WFO_IDS}
+    spatial_modes = ["land", "marine", "both"]
+    daily = {mode: {w: {} for w in WFO_IDS} for mode in spatial_modes}
     errors = []
     nbm_sources = ["NBM Deterministic"] + [f"P{p}" for p in PERCENTILES]
     default_sources = ["NDFD"] + nbm_sources
@@ -690,118 +758,122 @@ def main():
             except Exception:
                 geometry_snap = None
 
+        # Target the raw archived NDFD MinT snapshot once per lead. Unlike
+        # forecast.json, the WMO grid extends over coastal waters and lets the
+        # same NDFD source be verified for land, marine, and combined samples.
+        ndfd_wmo_by_lead = {}
+        for lead in lead_hours:
+            target_dt = valid_dt - timedelta(hours=lead)
+            try:
+                keys = ndfd_archive_keys(target_dt)
+                stamp = keys[0].rsplit("_", 1)[-1][:12]
+                actual_issue = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                ndfd_wmo_by_lead[lead] = (read_ndfd_archive(actual_issue, valid_day), actual_issue)
+            except Exception as exc:
+                errors.append(f"{valid_day} NDFD-WMO F{lead:03d}: {exc}")
+
         for wfo in WFO_IDS:
             field = ((geometry_snap or {}).get("fields") or {}).get(wfo)
             if not field:
                 continue
-            points = sample_nodes(field, geoms[wfo])
-            if len(points) < 3:
-                continue
-
-            try:
-                hourly = [sample_grib(g, points) for g in rtma_hours]
-                obs = np.nanmin(np.vstack(hourly), axis=0)
-            except Exception as exc:
-                errors.append(f"{valid_day} {wfo}: RTMA sample failed ({exc})")
-                continue
-
-            row = {
-                "date": valid_day.isoformat(),
-                "snapshot": sha,
-                "snapshotUtc": snap_time.isoformat() if snap_time else None,
-                "byLead": {},
+            land_points = sample_nodes(field, geoms[wfo])
+            marine_points = regular_points_in_geoms(marine_geoms.get(wfo) or [])
+            scope_points = {
+                "land": land_points,
+                "marine": marine_points,
+                "both": land_points + marine_points,
             }
 
-            for lead in lead_hours:
-                lead_row = {}
+            for spatial_mode, points in scope_points.items():
+                if len(points) < 3:
+                    continue
 
-                ndfd_item = ndfd_by_lead.get(lead)
-                if ndfd_item is not None:
-                    try:
-                        fpayload, period_key, fsha, ndfd_issue_dt = ndfd_item
-                        hist_field = ((fpayload.get("fields") or {}).get(wfo) or {})
-                        ndfd = sample_snapshot_field(hist_field, period_key, points)
-                        lead_row["NDFD"] = metrics(ndfd, obs)
-                        lead_row["NDFDIssueUtc"] = ndfd_issue_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-                        lead_row["NDFDSnapshot"] = fsha
-                        lead_row["NDFDPeriod"] = period_key
-                    except Exception as exc:
+                try:
+                    hourly = [sample_grib(g, points) for g in rtma_hours]
+                    obs = np.nanmin(np.vstack(hourly), axis=0)
+                except Exception as exc:
+                    errors.append(f"{valid_day} {wfo} {spatial_mode}: RTMA sample failed ({exc})")
+                    continue
+
+                row = {
+                    "date": valid_day.isoformat(),
+                    "snapshot": sha,
+                    "snapshotUtc": snap_time.isoformat() if snap_time else None,
+                    "sampleMode": spatial_mode,
+                    "sampleCount": len(points),
+                    "byLead": {},
+                }
+
+                for lead in lead_hours:
+                    lead_row = {}
+
+                    ndfd_item = ndfd_wmo_by_lead.get(lead)
+                    if ndfd_item is not None:
+                        try:
+                            ndfd_grids, ndfd_issue_dt = ndfd_item
+                            ndfd = sample_grib_collection(ndfd_grids, points)
+                            lead_row["NDFD"] = metrics(ndfd, obs)
+                            lead_row["NDFDIssueUtc"] = ndfd_issue_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        except Exception as exc:
+                            lead_row["NDFD"] = None
+                            errors.append(f"{valid_day} {wfo} {spatial_mode} NDFD F{lead:03d}: sampling failed ({exc})")
+                    else:
                         lead_row["NDFD"] = None
-                        errors.append(f"{valid_day} {wfo} NDFD F{lead:03d}: sampling failed ({exc})")
-                elif lead == 24 and snap is not None:
-                    # Preserve the repository snapshot only as a last-resort
-                    # fallback for the traditional 24-hour NDFD reference.
-                    try:
-                        snap_field = (snap.get("fields") or {}).get(wfo) or {}
-                        snap_points = sample_nodes(snap_field, geoms[wfo], require_values=True)
-                        ndfd = np.full(len(points), np.nan, dtype=float)
-                        if snap_points:
-                            sla = np.array([p[0] for p in snap_points])
-                            slo = np.array([p[1] for p in snap_points])
-                            sv = np.array([p[2] for p in snap_points], dtype=float)
-                            for n, (lat, lon, _) in enumerate(points):
-                                d = (sla - lat) ** 2 + ((slo - lon) * math.cos(math.radians(lat))) ** 2
-                                ndfd[n] = sv[int(np.argmin(d))]
-                        lead_row["NDFD"] = metrics(ndfd, obs)
-                    except Exception as exc:
-                        lead_row["NDFD"] = None
-                        errors.append(f"{valid_day} {wfo} NDFD F024 snapshot fallback failed ({exc})")
-                else:
-                    lead_row["NDFD"] = None
 
-                pair = nbm_by_lead.get(lead)
-                if pair:
-                    try:
-                        nbm_det, nbm_pct = pair
-                        det = sample_grib(nbm_det, points)
-                        lead_row["NBM Deterministic"] = metrics(det, obs)
-                        for p in PERCENTILES:
-                            lead_row[f"P{p}"] = metrics(sample_grib(nbm_pct[p], points), obs) if p in nbm_pct else None
-                    except Exception as exc:
-                        errors.append(f"{valid_day} {wfo} NBM F{lead:03d}: sampling failed ({exc})")
-                row["byLead"][str(lead)] = lead_row
+                    pair = nbm_by_lead.get(lead)
+                    if pair:
+                        try:
+                            nbm_det, nbm_pct = pair
+                            det = sample_grib(nbm_det, points)
+                            lead_row["NBM Deterministic"] = metrics(det, obs)
+                            for p in PERCENTILES:
+                                lead_row[f"P{p}"] = metrics(sample_grib(nbm_pct[p], points), obs) if p in nbm_pct else None
+                        except Exception as exc:
+                            errors.append(f"{valid_day} {wfo} {spatial_mode} NBM F{lead:03d}: sampling failed ({exc})")
+                    row["byLead"][str(lead)] = lead_row
 
-            # Backward-compatible 24-hour fields for the existing viewer.
-            lead24 = row["byLead"].get("24") or {}
-            row["NDFD"] = lead24.get("NDFD")
-            for src in nbm_sources:
-                row[src] = lead24.get(src)
+                lead24 = row["byLead"].get("24") or {}
+                row["NDFD"] = lead24.get("NDFD")
+                for src in nbm_sources:
+                    row[src] = lead24.get(src)
 
-            daily[wfo][valid_day.isoformat()] = row
+                daily[spatial_mode][wfo][valid_day.isoformat()] = row
 
     cwas = {}
     dates = [d.isoformat() for d in verify_days]
     for wfo in WFO_IDS:
-        base_rows = [daily[wfo].get(d) for d in dates]
-        base_summary = summarize_rows(base_rows, default_sources)
-        by_lead = {}
+        scopes = {}
+        for spatial_mode in spatial_modes:
+            base_rows = [daily[spatial_mode][wfo].get(d) for d in dates]
+            base_summary = summarize_rows(base_rows, default_sources)
+            by_lead = {}
+            for lead in lead_hours:
+                rows = []
+                for d in dates:
+                    daily_row = daily[spatial_mode][wfo].get(d) or {}
+                    rows.append(dict((daily_row.get("byLead") or {}).get(str(lead)) or {}))
+                summary = summarize_rows(rows, default_sources)
+                summary["leadHours"] = lead
+                summary["leadLabel"] = f"{lead} h before verifying 12Z"
+                by_lead[str(lead)] = summary
+            scopes[spatial_mode] = {
+                "dates": dates,
+                "dailyMae": base_summary["dailyMae"],
+                "dailyBias": base_summary["dailyBias"],
+                "ranking": base_summary["ranking"],
+                "byLead": by_lead,
+                "leadHours": lead_hours,
+                "defaultLeadHours": 24,
+                "leadLabel": "24 h before verifying 12Z MinT",
+                "sampleMode": spatial_mode,
+            }
 
-        for lead in lead_hours:
-            rows = []
-            for d in dates:
-                daily_row = daily[wfo].get(d) or {}
-                lr = dict((daily_row.get("byLead") or {}).get(str(lead)) or {})
-                rows.append(lr)
-            summary = summarize_rows(rows, default_sources)
-            summary["leadHours"] = lead
-            summary["leadLabel"] = f"{lead} h before verifying 12Z"
-            by_lead[str(lead)] = summary
-
-        cwas[wfo] = {
-            "dates": dates,
-            "dailyMae": base_summary["dailyMae"],
-            "dailyBias": base_summary["dailyBias"],
-            "ranking": base_summary["ranking"],
-            "byLead": by_lead,
-            "leadHours": lead_hours,
-            "defaultLeadHours": 24,
-            "leadLabel": "24 h before verifying 12Z MinT",
-            "sampleMode": "land",
-            "method": "CWA land-only sample nodes; NDFD uses the most recent repository forecast.json snapshot generated at or before each 12/24/36/48/60-hour target lead and selects the dated overnight period ending on the verifying day. NBM uses its corresponding archived model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
-        }
+        # Preserve the land block at the top level for backward compatibility.
+        land = scopes.get("land") or {}
+        cwas[wfo] = {**land, "scopes": scopes}
 
     payload = {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "generatedUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nbmVersion": "NBM v5.1",
         "element": "MinT",
@@ -809,8 +881,8 @@ def main():
         "windowDays": 5,
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
-        "spatialModes": ["land"],
-        "method": "Rolling CWA land MAE and mean bias versus RTMA. NDFD history comes from the actual forecast.json snapshots committed by this project at or before each requested lead; NBM deterministic and percentiles use the corresponding archived model cycles.",
+        "spatialModes": spatial_modes,
+        "method": "Rolling CWA MAE and mean bias versus RTMA for land, official coastal-marine-zone, or combined samples. Historical NDFD MinT comes from timestamped NOAA WMO archive snapshots; NBM deterministic and percentiles use corresponding archived model cycles."
         "cwas": cwas,
         "errors": errors[-60:],
     }
@@ -819,15 +891,20 @@ def main():
     # require a populated byLead block for every CWA.
     missing_leads = []
     for wfo, block in cwas.items():
-        present = set((block.get("byLead") or {}).keys())
-        required = {str(h) for h in lead_hours}
-        if not required.issubset(present):
-            missing_leads.append(f"{wfo}: missing {sorted(required - present)}")
+        for spatial_mode in spatial_modes:
+            scope = (block.get("scopes") or {}).get(spatial_mode) or {}
+            # Offices without coastal zones legitimately have no marine sample.
+            if spatial_mode == "marine" and not (marine_geoms.get(wfo) or []):
+                continue
+            present = set((scope.get("byLead") or {}).keys())
+            required = {str(h) for h in lead_hours}
+            if not required.issubset(present):
+                missing_leads.append(f"{wfo}/{spatial_mode}: missing {sorted(required - present)}")
     if missing_leads:
         raise RuntimeError("Lead-time verification schema incomplete: " + "; ".join(missing_leads))
 
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-    print(f"Wrote {OUTPUT} (schemaVersion=3; Git-backed NDFD forecast history + NBM lead cycles preserved)")
+    print(f"Wrote {OUTPUT} (schemaVersion=4; land/marine/both NDFD + NBM verification preserved)")
     for w in WFO_IDS:
         print(w, len(cwas[w]["dates"]), cwas[w]["byLead"].get("24", {}).get("ranking", [])[:3])
     if errors:
