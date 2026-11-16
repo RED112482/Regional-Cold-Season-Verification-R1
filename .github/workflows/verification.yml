@@ -39,11 +39,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install numpy boto3 eccodes eccodeslib
 
-      - name: Probe NDFD archive key structure
-        env:
-          DEBUG_NDFD_KEYS: "1"
-        run: python scripts/build_verification.py
-
       - name: Build rolling 5-day MinT verification (NDFD archive + RTMA)
         run: python scripts/build_verification.py
 
