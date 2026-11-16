@@ -318,7 +318,7 @@
             </div>
           </div>
           <div id="verifyUpdated" class="forecast-updated" style="margin-top:8px">Loading lead-time verification…</div>
-          <div class="small">MinT verified with RTMA · NBM F12/F24/F36/F48/F60 · NDFD shown at 24 hr reference</div>
+          <div class="small">MinT verified with RTMA · NDFD + NBM F12/F24/F36/F48/F60</div>
         </div>
       </div>
       <div class="verify-grid">
@@ -343,7 +343,7 @@
             <b>One Night:</b> choose one verifying date and watch the forecast evolve from 60 hr to 12 hr lead.<br>
             <b>Metric:</b> CWA mean absolute error (MAE) in °F; bias is signed forecast minus RTMA.<br>
             <b>Spatial sample:</b> land-only county sample. Marine areas are omitted in the current verification archive.<br>
-            <b>NDFD:</b> shown as a 24-hour operational reference only.
+            <b>NDFD:</b> archived lead-time verification is shown at the same 12/24/36/48/60-hour leads as NBM.
           </div>
         </div>
       </div>
@@ -486,17 +486,17 @@ async function renderVerification(){
   const selectedLead=(root.byLead||{})[String(state.verifyLeadHours)]||(state.verifyLeadHours===24?{dailyMae:root.dailyMae||{},dailyBias:root.dailyBias||{},ranking:root.ranking||[]}:{dailyMae:{},dailyBias:{},ranking:[]}),
         ranking=(selectedLead.ranking||[]).slice().sort((a,b)=>(a.mae??999)-(b.mae??999)),
         pct=ranking.find(x=>/^P\d+/.test(x.source)),
-        ndfd24=((root.byLead||{})['24']?.ranking||root.ranking||[]).find(x=>x.source==='NDFD'),
+        ndfdSelected=(selectedLead.ranking||[]).find(x=>x.source==='NDFD'),
         validMae=ranking.map(r=>num(r.mae)).filter(isNum),
         bestMae=validMae.length?Math.min(...validMae):null,
         worstMae=validMae.length?Math.max(...validMae):null;
 
   document.getElementById('verifyBestLabel').textContent=state.verifyMode==='trend'?'Best percentile · '+state.verifyLeadHours+'h':'Best percentile · selected night';
   document.getElementById('verifyBestMaeLabel').textContent=state.verifyMode==='trend'?'Best 5-night MAE':'Best selected-night MAE';
-  document.getElementById('verifyNdfdMaeLabel').textContent='NDFD 24h MAE';
+  document.getElementById('verifyNdfdMaeLabel').textContent='NDFD '+state.verifyLeadHours+'h MAE';
   document.getElementById('verifyBest').textContent=pct?pct.source:'—';
   document.getElementById('verifyBestMae').textContent=pct&&isNum(num(pct.mae))?num(pct.mae).toFixed(2)+'°F':'—';
-  document.getElementById('verifyNdfdMae').textContent=ndfd24&&isNum(num(ndfd24.mae))?num(ndfd24.mae).toFixed(2)+'°F':'—';
+  document.getElementById('verifyNdfdMae').textContent=ndfdSelected&&isNum(num(ndfdSelected.mae))?num(ndfdSelected.mae).toFixed(2)+'°F':'—';
   document.getElementById('verifyUpdated').textContent=(!hasLeadArchive?'Archived lead-time build in progress · controls remain available · ':'Last '+dates.length+' completed nights · ')+ 'Updated '+formatForecastUpdate(data.generatedUtc)+(data.nbmVersion?' · '+data.nbmVersion:'');
 
   function perfColor(mae,alpha=1){
@@ -515,7 +515,7 @@ async function renderVerification(){
   }else{
     const ix=state.verifyDateIndex,night=dates[ix]||'';
     chartLabels=leads.slice().sort((a,b)=>b-a).map(h=>h+'h');
-    const sources=verifySourceOrder().filter(x=>x!=='NDFD');
+    const sources=verifySourceOrder();
     chartMae={};chartBias={};
     sources.forEach(src=>{
       chartMae[src]=leads.slice().sort((a,b)=>b-a).map(h=>num((((root.byLead||{})[String(h)]||{}).dailyMae||{})[src]?.[ix]));
@@ -528,7 +528,7 @@ async function renderVerification(){
     }).filter(Boolean).sort((a,b)=>a.mae-b.mae);
     displayRanking=nightRows;
     title='Forecast Evolution · '+formatDayLabel(night);
-    note='Left to right: 60h → 12h before verification. Downward lines mean the forecast improved as the night approached. Ranking reflects the selected '+state.verifyLeadHours+'h lead.';
+    note='Left to right: 60h → 12h before verification. NDFD and NBM are both taken from the archived forecast available at each lead. Downward lines mean the forecast improved as the night approached. Ranking reflects the selected '+state.verifyLeadHours+'h lead.';
     document.getElementById('verifyRankingTitle').textContent='Selected Night · F'+state.verifyLeadHours+' Ranking';
     const bestNight=nightRows.find(x=>/^P\d+/.test(x.source));
     document.getElementById('verifyBest').textContent=bestNight?bestNight.source:'—';
