@@ -254,16 +254,14 @@ def discover_ndfd_mint_prefix():
     return _ndfd_mint_prefix
 
 
-def ndfd_archive_keys(issue_day):
-    """List archived NDFD MinT WMO files for issue_day.
-
-    Filename timestamps are used only for ordering; actual cycle/valid-time
-    selection is done from GRIB metadata because archive naming can vary.
-    """
+def ndfd_archive_keys(issue_dt):
+    """List archived NDFD MinT WMO files nearest the requested issuance time."""
     root = discover_ndfd_mint_prefix()
+    issue_day = issue_dt.date()
     prefix = f"{root}{issue_day:%Y/%m/%d}/"
     ranked = []
     token = None
+    target_minutes = issue_dt.hour * 60 + issue_dt.minute
     while True:
         kw = {"Bucket": NDFD_BUCKET, "Prefix": prefix, "MaxKeys": 1000}
         if token:
@@ -275,7 +273,7 @@ def ndfd_archive_keys(issue_day):
             tail = key.rsplit("_", 1)[-1]
             try:
                 ts = datetime.strptime(tail[:12], "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
-                rank = abs((ts.hour * 60 + ts.minute) - 12 * 60)
+                rank = abs((ts.hour * 60 + ts.minute) - target_minutes)
             except Exception:
                 pass
             ranked.append((rank, key))
@@ -287,12 +285,13 @@ def ndfd_archive_keys(issue_day):
     return [k for _, k in sorted(ranked)]
 
 
-def decode_ndfd_object(key, issue_day, valid_day):
-    """Decode all GRIB2 messages in one archived NDFD WMO object."""
+def decode_ndfd_object(key, issue_dt, valid_day):
+    """Decode archived NDFD MinT messages matching one requested issuance cycle."""
     body = s3.get_object(Bucket=NDFD_BUCKET, Key=key)["Body"].read()
-    # WMO wrappers precede the embedded GRIB messages; extract each GRIB...7777 block.
     messages = []
     pos = 0
+    target_date = issue_dt.strftime("%Y%m%d")
+    target_hour = issue_dt.hour
     while True:
         a = body.find(b"GRIB", pos)
         if a < 0:
@@ -331,20 +330,23 @@ def decode_ndfd_object(key, issue_day, valid_day):
                 continue
             if vt is not None and int(vt) not in (1200, 120000):
                 continue
-            # Prefer the 12Z issuance cycle. Some products encode dataTime as
-            # HHMM, others as HH; accept 11-13Z to accommodate dissemination.
-            if dd is not None and str(dd) != issue_day.strftime("%Y%m%d"):
+            if dd is not None and str(dd) != target_date:
                 continue
             if dtm is not None:
                 hh = int(dtm) // 100 if int(dtm) >= 100 else int(dtm)
-                if hh < 11 or hh > 13:
+                # NDFD grids can be disseminated shortly around the nominal
+                # issuance time. Accept +/- 1 hour but do not substitute a
+                # different forecast cycle.
+                delta = abs(hh - target_hour)
+                delta = min(delta, 24 - delta)
+                if delta > 1:
                     continue
             if "K" in units or units.lower().startswith("k"):
                 vals = (vals - 273.15) * 9.0 / 5.0 + 32.0
             vals = np.where(np.isfinite(vals) & (vals > -120.0) & (vals < 160.0), vals, np.nan)
             lons = np.where(lons > 180, lons - 360, lons)
             if np.isfinite(vals).any():
-                messages.append((vals, lats, lons, {"source": key}))
+                messages.append((vals, lats, lons, {"source": key, "issueUtc": issue_dt.isoformat()}))
         finally:
             try:
                 os.unlink(path)
@@ -353,21 +355,19 @@ def decode_ndfd_object(key, issue_day, valid_day):
     return messages
 
 
-def read_ndfd_archive(issue_day, valid_day):
-    """Return archived NDFD MinT grids from the 12Z issuance window."""
+def read_ndfd_archive(issue_dt, valid_day):
+    """Return archived NDFD MinT grids from the requested historical issuance."""
     grids = []
-    for key in ndfd_archive_keys(issue_day):
+    for key in ndfd_archive_keys(issue_dt):
         try:
-            grids.extend(decode_ndfd_object(key, issue_day, valid_day))
+            grids.extend(decode_ndfd_object(key, issue_dt, valid_day))
         except Exception:
             continue
-        # A few sector grids are enough to cover the supported Gulf/Southeast CWAs.
         if len(grids) >= 8:
             break
     if not grids:
-        raise RuntimeError(f"No usable archived NDFD MinT grids for {issue_day} -> {valid_day}")
+        raise RuntimeError(f"No usable archived NDFD MinT grids for {issue_dt:%Y-%m-%d %HZ} -> {valid_day}")
     return grids
-
 
 def sample_grib_collection(grids, points):
     """Sample nearest value from a collection of NDFD sector grids."""
@@ -520,9 +520,8 @@ def main():
     verify_days = [latest - timedelta(days=i) for i in range(4, -1, -1)]
     lead_hours = [12, 24, 36, 48, 60]
 
-    # daily[wfo][valid-date] contains a byLead dictionary. NDFD remains a
-    # 24-hour operational reference; NBM deterministic/percentiles are retained
-    # at every requested lead.
+    # daily[wfo][valid-date] contains a byLead dictionary. Archived NDFD and
+    # NBM deterministic/percentiles are retained at every requested lead.
     daily = {w: {} for w in WFO_IDS}
     errors = []
     nbm_sources = ["NBM Deterministic"] + [f"P{p}" for p in PERCENTILES]
@@ -533,11 +532,6 @@ def main():
         issue_day = valid_day - timedelta(days=1)
 
         snap, sha, snap_time = historical_forecast_snapshot(issue_day)
-        try:
-            ndfd_archive = read_ndfd_archive(issue_day, valid_day)
-        except Exception as exc:
-            ndfd_archive = None
-            errors.append(f"{valid_day}: archived NDFD unavailable ({exc}); using repository snapshot if present")
 
         try:
             rtma_hours = [read_rtma_hour(valid_day, h) for h in range(0, 13)]
@@ -546,12 +540,17 @@ def main():
             continue
 
         nbm_by_lead = {}
+        ndfd_by_lead = {}
         for lead in lead_hours:
             init_dt = valid_dt - timedelta(hours=lead)
             try:
                 nbm_by_lead[lead] = read_nbm(init_dt, lead)
             except Exception as exc:
-                errors.append(f"{valid_day} F{lead:03d}: {exc}")
+                errors.append(f"{valid_day} NBM F{lead:03d}: {exc}")
+            try:
+                ndfd_by_lead[lead] = read_ndfd_archive(init_dt, valid_day)
+            except Exception as exc:
+                errors.append(f"{valid_day} NDFD F{lead:03d}: {exc}")
 
         geometry_snap = snap
         if geometry_snap is None:
@@ -582,35 +581,38 @@ def main():
                 "byLead": {},
             }
 
-            # NDFD is retained at the 24-hour reference lead.
-            if ndfd_archive is not None:
-                try:
-                    ndfd = sample_grib_collection(ndfd_archive, points)
-                    row["NDFD"] = metrics(ndfd, obs)
-                except Exception as exc:
-                    row["NDFD"] = None
-                    errors.append(f"{valid_day} {wfo}: NDFD sample failed ({exc})")
-            elif snap is not None:
-                try:
-                    snap_field = (snap.get("fields") or {}).get(wfo) or {}
-                    snap_points = sample_nodes(snap_field, geoms[wfo], require_values=True)
-                    ndfd = np.full(len(points), np.nan, dtype=float)
-                    if snap_points:
-                        sla = np.array([p[0] for p in snap_points])
-                        slo = np.array([p[1] for p in snap_points])
-                        sv = np.array([p[2] for p in snap_points], dtype=float)
-                        for n, (lat, lon, _) in enumerate(points):
-                            d = (sla - lat) ** 2 + ((slo - lon) * math.cos(math.radians(lat))) ** 2
-                            ndfd[n] = sv[int(np.argmin(d))]
-                    row["NDFD"] = metrics(ndfd, obs)
-                except Exception as exc:
-                    row["NDFD"] = None
-                    errors.append(f"{valid_day} {wfo}: repository NDFD sample failed ({exc})")
-            else:
-                row["NDFD"] = None
-
             for lead in lead_hours:
                 lead_row = {}
+
+                ndfd_grids = ndfd_by_lead.get(lead)
+                if ndfd_grids is not None:
+                    try:
+                        ndfd = sample_grib_collection(ndfd_grids, points)
+                        lead_row["NDFD"] = metrics(ndfd, obs)
+                    except Exception as exc:
+                        lead_row["NDFD"] = None
+                        errors.append(f"{valid_day} {wfo} NDFD F{lead:03d}: sampling failed ({exc})")
+                elif lead == 24 and snap is not None:
+                    # Preserve the repository snapshot only as a last-resort
+                    # fallback for the traditional 24-hour NDFD reference.
+                    try:
+                        snap_field = (snap.get("fields") or {}).get(wfo) or {}
+                        snap_points = sample_nodes(snap_field, geoms[wfo], require_values=True)
+                        ndfd = np.full(len(points), np.nan, dtype=float)
+                        if snap_points:
+                            sla = np.array([p[0] for p in snap_points])
+                            slo = np.array([p[1] for p in snap_points])
+                            sv = np.array([p[2] for p in snap_points], dtype=float)
+                            for n, (lat, lon, _) in enumerate(points):
+                                d = (sla - lat) ** 2 + ((slo - lon) * math.cos(math.radians(lat))) ** 2
+                                ndfd[n] = sv[int(np.argmin(d))]
+                        lead_row["NDFD"] = metrics(ndfd, obs)
+                    except Exception as exc:
+                        lead_row["NDFD"] = None
+                        errors.append(f"{valid_day} {wfo} NDFD F024 snapshot fallback failed ({exc})")
+                else:
+                    lead_row["NDFD"] = None
+
                 pair = nbm_by_lead.get(lead)
                 if pair:
                     try:
@@ -620,11 +622,12 @@ def main():
                         for p in PERCENTILES:
                             lead_row[f"P{p}"] = metrics(sample_grib(nbm_pct[p], points), obs) if p in nbm_pct else None
                     except Exception as exc:
-                        errors.append(f"{valid_day} {wfo} F{lead:03d}: sampling failed ({exc})")
+                        errors.append(f"{valid_day} {wfo} NBM F{lead:03d}: sampling failed ({exc})")
                 row["byLead"][str(lead)] = lead_row
 
             # Backward-compatible 24-hour fields for the existing viewer.
             lead24 = row["byLead"].get("24") or {}
+            row["NDFD"] = lead24.get("NDFD")
             for src in nbm_sources:
                 row[src] = lead24.get(src)
 
@@ -642,11 +645,8 @@ def main():
             for d in dates:
                 daily_row = daily[wfo].get(d) or {}
                 lr = dict((daily_row.get("byLead") or {}).get(str(lead)) or {})
-                # NDFD is a 24-hour reference only.
-                if lead == 24:
-                    lr["NDFD"] = daily_row.get("NDFD")
                 rows.append(lr)
-            summary = summarize_rows(rows, default_sources if lead == 24 else nbm_sources)
+            summary = summarize_rows(rows, default_sources)
             summary["leadHours"] = lead
             summary["leadLabel"] = f"{lead} h before verifying 12Z"
             by_lead[str(lead)] = summary
@@ -661,7 +661,7 @@ def main():
             "defaultLeadHours": 24,
             "leadLabel": "24 h before verifying 12Z MinT",
             "sampleMode": "land",
-            "method": "CWA land-only sample nodes; NBM lead-time guidance is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z. NDFD is retained as a 24-hour reference.",
+            "method": "CWA land-only sample nodes; archived NDFD and NBM guidance at 12/24/36/48/60-hour lead is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z.",
         }
 
     payload = {
@@ -674,7 +674,7 @@ def main():
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
         "spatialModes": ["land"],
-        "method": "Rolling CWA land MAE and mean bias versus RTMA. NBM deterministic and percentiles retain 12/24/36/48/60-hour lead-time verification; NDFD is a 24-hour reference.",
+        "method": "Rolling CWA land MAE and mean bias versus RTMA. Archived NDFD plus NBM deterministic and percentiles retain 12/24/36/48/60-hour lead-time verification.",
         "cwas": cwas,
         "errors": errors[-60:],
     }
