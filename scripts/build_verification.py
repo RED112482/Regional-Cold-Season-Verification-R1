@@ -352,7 +352,7 @@ def fetch_message(bucket, key, line_index, lines):
                 lons = np.asarray(codes_get_array(gid, "longitudes"), dtype=float)
                 units = str(codes_get(gid, "units") or "")
                 meta = {}
-                for name in ("shortName", "name", "stepType", "typeOfStatisticalProcessing", "percentileValue", "validityDate", "validityTime", "dataDate", "dataTime", "forecastTime"):
+                for name in ("shortName", "name", "stepType", "typeOfStatisticalProcessing", "percentileValue", "validityDate", "validityTime", "dataDate", "dataTime", "forecastTime", "startStep", "endStep", "stepRange"):
                     try:
                         meta[name] = codes_get(gid, name)
                     except Exception:
@@ -585,50 +585,75 @@ def nbm_keys(init_dt, lead_hours):
     )
 
 
+def grib_valid_datetime(meta):
+    """Return GRIB validity timestamp in UTC when metadata provides it."""
+    try:
+        d = str(int(meta.get("validityDate"))).zfill(8)
+        t = str(int(meta.get("validityTime", 0))).zfill(4)
+        return datetime.strptime(d + t[-4:], "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def grib_matches_valid(meta, expected_dt):
+    got = grib_valid_datetime(meta)
+    return got is not None and got == expected_dt.astimezone(timezone.utc)
+
+
 def read_nbm(init_dt, lead_hours):
     core_pref, qmd_pref = nbm_keys(init_dt, lead_hours)
     ds = init_dt.strftime("%Y%m%d")
     hh = init_dt.strftime("%H")
     fh = f"{int(lead_hours):03d}"
+    expected_valid = (init_dt + timedelta(hours=int(lead_hours))).astimezone(timezone.utc)
     core = find_key(NBM_BUCKET, core_pref, f"blend.{ds}/{hh}/", f"blend.t{hh}z.core.f{fh}.co.grib2")
     qmd = find_key(NBM_BUCKET, qmd_pref, f"blend.{ds}/{hh}/", f"blend.t{hh}z.qmd.f{fh}.co.grib2")
 
     core_lines = idx_lines(NBM_BUCKET, core)
     cand = select_idx_candidates(core_lines, ["tmp", "min"])
     if not cand:
-        cand = select_idx_candidates(core_lines, ["tmp", "2 m above ground"])
-    if not cand:
         raise RuntimeError(f"Could not locate NBM deterministic MinT message F{fh}")
     det = None
-    for ci in reversed(cand):
+    rejected = []
+    for ci in cand:
         trial = fetch_message(NBM_BUCKET, core, ci, core_lines)
-        vals = trial[0]
+        vals, _, _, meta = trial
+        if not grib_matches_valid(meta, expected_valid):
+            rejected.append(grib_valid_datetime(meta))
+            continue
+        if str(meta.get("stepType") or "").lower() not in ("min", "minimum"):
+            continue
         finite = vals[np.isfinite(vals)]
         if finite.size and -80.0 < float(np.nanmedian(finite)) < 130.0:
             det = trial
             break
     if det is None:
-        raise RuntimeError(f"NBM deterministic MinT F{fh} failed physical-range checks")
+        raise RuntimeError(
+            f"NBM deterministic MinT F{fh} has no message valid exactly "
+            f"{expected_valid:%Y-%m-%d %HZ}; candidates={rejected}"
+        )
 
     qlines = idx_lines(NBM_BUCKET, qmd)
     min_candidates = select_idx_candidates(qlines, ["tmp", "min"])
     if not min_candidates:
-        min_candidates = select_idx_candidates(qlines, ["tmp", "2 m above ground"])
+        raise RuntimeError(f"Could not locate NBM percentile MinT messages F{fh}")
     pct = {}
     for i in min_candidates:
         vals, lats, lons, meta = fetch_message(NBM_BUCKET, qmd, i, qlines)
+        if not grib_matches_valid(meta, expected_valid):
+            continue
+        if str(meta.get("stepType") or "").lower() not in ("min", "minimum"):
+            continue
         p = safe_float(meta.get("percentileValue"))
         if p is not None and int(round(p)) in PERCENTILES:
             pct[int(round(p))] = (vals, lats, lons, meta)
-    if len(pct) < 3:
-        for p in PERCENTILES:
-            if p in pct:
-                continue
-            tokens = [f"{p}% level", f"{p} percentile", f"percentile={p}"]
-            for i in min_candidates:
-                if any(t in qlines[i].lower() for t in tokens):
-                    pct[p] = fetch_message(NBM_BUCKET, qmd, i, qlines)
-                    break
+
+    missing = [p for p in PERCENTILES if p not in pct]
+    if missing:
+        raise RuntimeError(
+            f"NBM percentile MinT F{fh} missing {missing} at exact valid time "
+            f"{expected_valid:%Y-%m-%d %HZ}"
+        )
     return det, pct
 
 def rtma_key(day, hour):
@@ -878,6 +903,7 @@ def main():
         "nbmVersion": "NBM v5.1",
         "element": "MinT",
         "verification": "RTMA",
+        "validTimeDefinition": "Forecast MinT valid at 12Z; observed verification is the minimum hourly RTMA 2-m temperature from 00Z through 12Z inclusive.",
         "windowDays": 5,
         "leadHours": lead_hours,
         "defaultLeadHours": 24,
