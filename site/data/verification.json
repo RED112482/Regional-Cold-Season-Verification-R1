@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "generatedUtc": "2026-11-16T06:12:53Z",
+  "generatedUtc": "2026-11-16T07:25:16Z",
   "nbmVersion": "NBM v5.1",
   "element": "MinT",
   "verification": "RTMA",
@@ -16,7 +16,7 @@
   "spatialModes": [
     "land"
   ],
-  "method": "Rolling CWA land MAE and mean bias versus RTMA. NDFD uses the most recent forecast.json snapshot available at or before each 12/24/36/48/60-hour lead and the overnight period ending on the verifying date; NBM uses archived model cycles.",
+  "method": "Rolling CWA land MAE and mean bias versus RTMA. NDFD history comes from the actual forecast.json snapshots committed by this project at or before each requested lead; NBM deterministic and percentiles use the corresponding archived model cycles.",
   "cwas": {
     "MOB": {
       "dates": [
@@ -175,6 +175,13 @@
       "byLead": {
         "12": {
           "dailyMae": {
+            "NDFD": [
+              1.382238410596053,
+              1.2159470198675504,
+              1.7226490066225633,
+              1.4061324503310912,
+              1.9139470198675028
+            ],
             "NBM Deterministic": [
               3.6159735099337684,
               5.435403973509927,
@@ -216,16 +223,16 @@
               2.2156092715231774,
               4.220713907284763,
               5.385909933774827
-            ],
-            "NDFD": [
-              1.382238410596053,
-              1.2159470198675504,
-              1.7226490066225633,
-              1.4061324503310912,
-              1.9139470198675028
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -0.8665562913907809,
+              0.13856953642378764,
+              -1.4880529801325053,
+              1.0887814569535863,
+              1.8114039735098788
+            ],
             "NBM Deterministic": [
               -2.9550993377483357,
               -5.127854304635754,
@@ -267,13 +274,6 @@
               2.0622635761589363,
               4.220713907284763,
               5.385909933774827
-            ],
-            "NDFD": [
-              -0.8665562913907809,
-              0.13856953642378764,
-              -1.4880529801325053,
-              1.0887814569535863,
-              1.8114039735098788
             ]
           },
           "ranking": [
@@ -321,34 +321,7 @@
             }
           ],
           "leadHours": 12,
-          "leadLabel": "12 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T23:00:30Z",
-              "snapshot": "960114b127bc0bb37d0b1d4a33e71ab1e69c5d40",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "12 h before verifying 12Z"
         },
         "24": {
           "dailyMae": {
@@ -498,37 +471,17 @@
             }
           ],
           "leadHours": 24,
-          "leadLabel": "24 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T06:22:48Z",
-              "snapshot": "0acbe429711ce61fe435bae12d0643a81995551f",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "24 h before verifying 12Z"
         },
         "36": {
           "dailyMae": {
+            "NDFD": [
+              3.6077483443709104,
+              1.1923708609271637,
+              2.7040529801325017,
+              1.1104768211920248,
+              1.853655629139025
+            ],
             "NBM Deterministic": [
               3.372794701986746,
               5.286635761589402,
@@ -570,16 +523,16 @@
               2.1809443708609217,
               3.8498423841059557,
               4.480509933774824
-            ],
-            "NDFD": [
-              3.6077483443709104,
-              1.1923708609271637,
-              2.7040529801325017,
-              1.1104768211920248,
-              1.853655629139025
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -3.528807947019921,
+              -0.4177218543046892,
+              -2.633748344370916,
+              0.6384503311257718,
+              1.7518013245032562
+            ],
             "NBM Deterministic": [
               -2.8668874172185337,
               -4.8834834437086005,
@@ -621,13 +574,6 @@
               2.0399721854304573,
               3.8498423841059557,
               4.480509933774824
-            ],
-            "NDFD": [
-              -3.528807947019921,
-              -0.4177218543046892,
-              -2.633748344370916,
-              0.6384503311257718,
-              1.7518013245032562
             ]
           },
           "ranking": [
@@ -675,37 +621,17 @@
             }
           ],
           "leadHours": 36,
-          "leadLabel": "36 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "36 h before verifying 12Z"
         },
         "48": {
           "dailyMae": {
+            "NDFD": [
+              3.6077483443709104,
+              1.8231788079470534,
+              2.7040529801325017,
+              1.8992185430463067,
+              1.20062251655626
+            ],
             "NBM Deterministic": [
               3.3720794701986634,
               4.836754966887413,
@@ -747,16 +673,16 @@
               1.3744728476821229,
               3.104213245033107,
               4.2795178807947005
-            ],
-            "NDFD": [
-              3.6077483443709104,
-              1.8231788079470534,
-              2.7040529801325017,
-              1.8992185430463067,
-              1.20062251655626
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -3.528807947019921,
+              -1.4773245033113116,
+              -2.633748344370916,
+              1.837125827814514,
+              0.8511390728476267
+            ],
             "NBM Deterministic": [
               -2.8740397350993234,
               -4.029973509933768,
@@ -798,13 +724,6 @@
               0.4373284768211869,
               3.104213245033107,
               4.2795178807947005
-            ],
-            "NDFD": [
-              -3.528807947019921,
-              -1.4773245033113116,
-              -2.633748344370916,
-              1.837125827814514,
-              0.8511390728476267
             ]
           },
           "ranking": [
@@ -852,37 +771,17 @@
             }
           ],
           "leadHours": 48,
-          "leadLabel": "48 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T09:10:01Z",
-              "snapshot": "fec403881b625cd02f41cc364c3416eaeed9a6fc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "48 h before verifying 12Z"
         },
         "60": {
           "dailyMae": {
+            "NDFD": [
+              null,
+              2.3950463576159384,
+              3.627125827814625,
+              1.9592185430463127,
+              1.2016291390728298
+            ],
             "NBM Deterministic": [
               4.323099337748335,
               5.228701986754965,
@@ -924,16 +823,16 @@
               2.7829192052980147,
               3.847184105960266,
               4.286157615894035
-            ],
-            "NDFD": [
-              null,
-              2.3950463576159384,
-              3.627125827814625,
-              1.9592185430463127,
-              1.2016291390728298
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              null,
+              -2.2389139072848216,
+              -3.627125827814625,
+              1.8569933774833884,
+              0.685576158940342
+            ],
             "NBM Deterministic": [
               -3.9826490066225038,
               -4.907324503311253,
@@ -975,13 +874,6 @@
               2.7507337748344383,
               3.847184105960266,
               4.286157615894035
-            ],
-            "NDFD": [
-              null,
-              -2.2389139072848216,
-              -3.627125827814625,
-              1.8569933774833884,
-              0.685576158940342
             ]
           },
           "ranking": [
@@ -1029,30 +921,7 @@
             }
           ],
           "leadHours": 60,
-          "leadLabel": "60 h before verifying 12Z",
-          "ndfdHistory": [
-            null,
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day3"
-            }
-          ]
+          "leadLabel": "60 h before verifying 12Z"
         }
       },
       "leadHours": [
@@ -1065,7 +934,7 @@
       "defaultLeadHours": 24,
       "leadLabel": "24 h before verifying 12Z MinT",
       "sampleMode": "land",
-      "method": "CWA land-only sample nodes; NBM lead-time guidance is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z. NDFD is retained as a 24-hour reference."
+      "method": "CWA land-only sample nodes; NDFD uses the most recent repository forecast.json snapshot generated at or before each 12/24/36/48/60-hour target lead and selects the dated overnight period ending on the verifying day. NBM uses its corresponding archived model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "LIX": {
       "dates": [
@@ -1224,6 +1093,13 @@
       "byLead": {
         "12": {
           "dailyMae": {
+            "NDFD": [
+              4.522620689655222,
+              1.3662413793103794,
+              1.178172413793113,
+              1.1146034482758531,
+              1.6787586206896687
+            ],
             "NBM Deterministic": [
               7.036758620689643,
               6.962275862068956,
@@ -1265,16 +1141,16 @@
               1.7579327586206916,
               2.9221758620689644,
               4.623812068965519
-            ],
-            "NDFD": [
-              4.522620689655222,
-              1.3662413793103794,
-              1.178172413793113,
-              1.1146034482758531,
-              1.6787586206896687
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -4.446000000000051,
+              -0.9735172413793629,
+              -0.20258620689660575,
+              0.42267241379305015,
+              -0.7504137931035013
+            ],
             "NBM Deterministic": [
               -6.751862068965504,
               -6.920068965517229,
@@ -1316,13 +1192,6 @@
               1.6279913793103449,
               2.9221758620689644,
               4.623812068965519
-            ],
-            "NDFD": [
-              -4.446000000000051,
-              -0.9735172413793629,
-              -0.20258620689660575,
-              0.42267241379305015,
-              -0.7504137931035013
             ]
           },
           "ranking": [
@@ -1370,34 +1239,7 @@
             }
           ],
           "leadHours": 12,
-          "leadLabel": "12 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T23:00:30Z",
-              "snapshot": "960114b127bc0bb37d0b1d4a33e71ab1e69c5d40",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "12 h before verifying 12Z"
         },
         "24": {
           "dailyMae": {
@@ -1547,37 +1389,17 @@
             }
           ],
           "leadHours": 24,
-          "leadLabel": "24 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T06:22:48Z",
-              "snapshot": "0acbe429711ce61fe435bae12d0643a81995551f",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "24 h before verifying 12Z"
         },
         "36": {
           "dailyMae": {
+            "NDFD": [
+              4.997034482758666,
+              3.6480689655172918,
+              1.0267931034482796,
+              1.5102931034483147,
+              1.7886206896551975
+            ],
             "NBM Deterministic": [
               6.820448275862058,
               6.768310344827581,
@@ -1619,16 +1441,16 @@
               2.820056896551724,
               3.255998275862072,
               3.1508224137931022
-            ],
-            "NDFD": [
-              4.997034482758666,
-              3.6480689655172918,
-              1.0267931034482796,
-              1.5102931034483147,
-              1.7886206896551975
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -4.549448275862121,
+              -3.6286896551724666,
+              0.07327586206891148,
+              -1.1980172413793635,
+              -1.0090344827586737
+            ],
             "NBM Deterministic": [
               -6.435310344827574,
               -6.73541379310344,
@@ -1670,13 +1492,6 @@
               2.7730086206896547,
               3.255998275862072,
               3.1169017241379287
-            ],
-            "NDFD": [
-              -4.549448275862121,
-              -3.6286896551724666,
-              0.07327586206891148,
-              -1.1980172413793635,
-              -1.0090344827586737
             ]
           },
           "ranking": [
@@ -1724,37 +1539,17 @@
             }
           ],
           "leadHours": 36,
-          "leadLabel": "36 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "36 h before verifying 12Z"
         },
         "48": {
           "dailyMae": {
+            "NDFD": [
+              4.997034482758666,
+              3.6480689655172918,
+              1.829724137931073,
+              1.3356724137930798,
+              1.914827586206917
+            ],
             "NBM Deterministic": [
               6.499241379310342,
               6.118137931034477,
@@ -1796,16 +1591,16 @@
               1.7318637931034484,
               2.353825862068965,
               3.2953499999999996
-            ],
-            "NDFD": [
-              4.997034482758666,
-              3.6480689655172918,
-              1.829724137931073,
-              1.3356724137930798,
-              1.914827586206917
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -4.549448275862121,
+              -3.6286896551724666,
+              -1.5129310344828126,
+              0.836465517241326,
+              -0.8624827586207428
+            ],
             "NBM Deterministic": [
               -6.0954827586206815,
               -5.734551724137922,
@@ -1847,13 +1642,6 @@
               1.6213189655172358,
               2.3376568965517235,
               3.2948224137931033
-            ],
-            "NDFD": [
-              -4.549448275862121,
-              -3.6286896551724666,
-              -1.5129310344828126,
-              0.836465517241326,
-              -0.8624827586207428
             ]
           },
           "ranking": [
@@ -1901,37 +1689,17 @@
             }
           ],
           "leadHours": 48,
-          "leadLabel": "48 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T09:10:01Z",
-              "snapshot": "fec403881b625cd02f41cc364c3416eaeed9a6fc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "48 h before verifying 12Z"
         },
         "60": {
           "dailyMae": {
+            "NDFD": [
+              null,
+              2.3185172413793573,
+              1.800448275862105,
+              1.3369482758620486,
+              2.2354827586207144
+            ],
             "NBM Deterministic": [
               7.8262758620689565,
               6.679241379310332,
@@ -1973,16 +1741,16 @@
               3.9426206896551705,
               3.218881034482757,
               2.9038034482758643
-            ],
-            "NDFD": [
-              null,
-              2.3185172413793573,
-              1.800448275862105,
-              1.3369482758620486,
-              2.2354827586207144
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              null,
+              -2.1373103448276387,
+              -1.461206896551778,
+              0.7847413793102915,
+              -1.5521379310345358
+            ],
             "NBM Deterministic": [
               -7.662724137931026,
               -6.572482758620678,
@@ -2024,13 +1792,6 @@
               3.912858620689653,
               3.218881034482757,
               2.8202275862069013
-            ],
-            "NDFD": [
-              null,
-              -2.1373103448276387,
-              -1.461206896551778,
-              0.7847413793102915,
-              -1.5521379310345358
             ]
           },
           "ranking": [
@@ -2078,30 +1839,7 @@
             }
           ],
           "leadHours": 60,
-          "leadLabel": "60 h before verifying 12Z",
-          "ndfdHistory": [
-            null,
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day3"
-            }
-          ]
+          "leadLabel": "60 h before verifying 12Z"
         }
       },
       "leadHours": [
@@ -2114,7 +1852,7 @@
       "defaultLeadHours": 24,
       "leadLabel": "24 h before verifying 12Z MinT",
       "sampleMode": "land",
-      "method": "CWA land-only sample nodes; NBM lead-time guidance is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z. NDFD is retained as a 24-hour reference."
+      "method": "CWA land-only sample nodes; NDFD uses the most recent repository forecast.json snapshot generated at or before each 12/24/36/48/60-hour target lead and selects the dated overnight period ending on the verifying day. NBM uses its corresponding archived model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "JAN": {
       "dates": [
@@ -2273,6 +2011,13 @@
       "byLead": {
         "12": {
           "dailyMae": {
+            "NDFD": [
+              1.5470658682634908,
+              3.170526946107833,
+              3.264299401197648,
+              1.429808383233505,
+              1.7912215568862375
+            ],
             "NBM Deterministic": [
               4.761808383233529,
               6.2715449101796334,
@@ -2314,16 +2059,16 @@
               1.8530622754491,
               3.3608479041916155,
               4.193267065868261
-            ],
-            "NDFD": [
-              1.5470658682634908,
-              3.170526946107833,
-              3.264299401197648,
-              1.429808383233505,
-              1.7912215568862375
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -0.98165269461083,
+              -3.0410898203593386,
+              -3.0602275449102363,
+              0.90827544910174,
+              -0.5149580838323898
+            ],
             "NBM Deterministic": [
               -4.270095808383223,
               -6.2530059880239435,
@@ -2365,13 +2110,6 @@
               1.680413173652692,
               3.354380838323351,
               4.193267065868261
-            ],
-            "NDFD": [
-              -0.98165269461083,
-              -3.0410898203593386,
-              -3.0602275449102363,
-              0.90827544910174,
-              -0.5149580838323898
             ]
           },
           "ranking": [
@@ -2419,34 +2157,7 @@
             }
           ],
           "leadHours": 12,
-          "leadLabel": "12 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T23:00:30Z",
-              "snapshot": "960114b127bc0bb37d0b1d4a33e71ab1e69c5d40",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "12 h before verifying 12Z"
         },
         "24": {
           "dailyMae": {
@@ -2596,37 +2307,17 @@
             }
           ],
           "leadHours": 24,
-          "leadLabel": "24 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T06:22:48Z",
-              "snapshot": "0acbe429711ce61fe435bae12d0643a81995551f",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "24 h before verifying 12Z"
         },
         "36": {
           "dailyMae": {
+            "NDFD": [
+              1.6974850299401436,
+              2.9082035928144143,
+              3.505688622754543,
+              1.553089820359248,
+              1.7036526946107853
+            ],
             "NBM Deterministic": [
               4.318383233532925,
               6.069988023952091,
@@ -2668,16 +2359,16 @@
               1.8918107784431057,
               3.1768814371257452,
               3.5625880239520953
-            ],
-            "NDFD": [
-              1.6974850299401436,
-              2.9082035928144143,
-              3.505688622754543,
-              1.553089820359248,
-              1.7036526946107853
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -1.3169820359281954,
+              -2.6877964071856857,
+              -3.443461077844368,
+              1.1537844311376682,
+              -0.508970059880294
+            ],
             "NBM Deterministic": [
               -3.95752095808382,
               -6.04067065868263,
@@ -2719,13 +2410,6 @@
               1.6696023952095724,
               3.1683017964071825,
               3.5625880239520953
-            ],
-            "NDFD": [
-              -1.3169820359281954,
-              -2.6877964071856857,
-              -3.443461077844368,
-              1.1537844311376682,
-              -0.508970059880294
             ]
           },
           "ranking": [
@@ -2773,37 +2457,17 @@
             }
           ],
           "leadHours": 36,
-          "leadLabel": "36 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "36 h before verifying 12Z"
         },
         "48": {
           "dailyMae": {
+            "NDFD": [
+              4.778059880239573,
+              2.05196407185632,
+              3.505688622754543,
+              1.1989101796407122,
+              2.1431736526946437
+            ],
             "NBM Deterministic": [
               3.9913652694610717,
               4.788215568862268,
@@ -2845,16 +2509,16 @@
               1.5430419161676645,
               2.275189221556883,
               3.465053892215566
-            ],
-            "NDFD": [
-              4.778059880239573,
-              2.05196407185632,
-              3.505688622754543,
-              1.1989101796407122,
-              2.1431736526946437
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -4.778059880239573,
+              -1.5440838323353863,
+              -3.443461077844368,
+              0.1957005988023388,
+              -1.7125628742515517
+            ],
             "NBM Deterministic": [
               -3.6632694610778365,
               -4.4821077844311334,
@@ -2896,13 +2560,6 @@
               0.7886586826347252,
               2.2343604790419134,
               3.463738922155685
-            ],
-            "NDFD": [
-              -4.778059880239573,
-              -1.5440838323353863,
-              -3.443461077844368,
-              0.1957005988023388,
-              -1.7125628742515517
             ]
           },
           "ranking": [
@@ -2950,37 +2607,17 @@
             }
           ],
           "leadHours": 48,
-          "leadLabel": "48 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T09:10:01Z",
-              "snapshot": "fec403881b625cd02f41cc364c3416eaeed9a6fc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "48 h before verifying 12Z"
         },
         "60": {
           "dailyMae": {
+            "NDFD": [
+              null,
+              2.4964910179641167,
+              4.0348143712575375,
+              1.4302634730538553,
+              1.6665988023952303
+            ],
             "NBM Deterministic": [
               5.90302994011975,
               5.389868263473049,
@@ -3022,16 +2659,16 @@
               2.703794011976045,
               3.1569413173652627,
               2.737886227544906
-            ],
-            "NDFD": [
-              null,
-              2.4964910179641167,
-              4.0348143712575375,
-              1.4302634730538553,
-              1.6665988023952303
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              null,
+              -2.3165389221557455,
+              -3.994359281437182,
+              1.1717485029939558,
+              -0.9760359281437669
+            ],
             "NBM Deterministic": [
               -5.90302994011975,
               -5.272167664670656,
@@ -3073,13 +2710,6 @@
               2.676804790419161,
               3.1565964071856216,
               2.7301041916167614
-            ],
-            "NDFD": [
-              null,
-              -2.3165389221557455,
-              -3.994359281437182,
-              1.1717485029939558,
-              -0.9760359281437669
             ]
           },
           "ranking": [
@@ -3127,30 +2757,7 @@
             }
           ],
           "leadHours": 60,
-          "leadLabel": "60 h before verifying 12Z",
-          "ndfdHistory": [
-            null,
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day3"
-            }
-          ]
+          "leadLabel": "60 h before verifying 12Z"
         }
       },
       "leadHours": [
@@ -3163,7 +2770,7 @@
       "defaultLeadHours": 24,
       "leadLabel": "24 h before verifying 12Z MinT",
       "sampleMode": "land",
-      "method": "CWA land-only sample nodes; NBM lead-time guidance is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z. NDFD is retained as a 24-hour reference."
+      "method": "CWA land-only sample nodes; NDFD uses the most recent repository forecast.json snapshot generated at or before each 12/24/36/48/60-hour target lead and selects the dated overnight period ending on the verifying day. NBM uses its corresponding archived model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "BMX": {
       "dates": [
@@ -3322,6 +2929,13 @@
       "byLead": {
         "12": {
           "dailyMae": {
+            "NDFD": [
+              1.7143096774193285,
+              2.3947741935484053,
+              2.990683870967784,
+              1.1139612903225908,
+              1.7090451612902817
+            ],
             "NBM Deterministic": [
               2.9324903225806476,
               5.459458064516119,
@@ -3363,16 +2977,16 @@
               1.2251961290322568,
               2.822539354838707,
               4.133519999999995
-            ],
-            "NDFD": [
-              1.7143096774193285,
-              2.3947741935484053,
-              2.990683870967784,
-              1.1139612903225908,
-              1.7090451612902817
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              1.3340774193547915,
+              -1.1410451612903778,
+              -2.8481806451613436,
+              -0.22727741935489276,
+              1.3219225806451054
+            ],
             "NBM Deterministic": [
               -0.052954838709666406,
               -4.7176258064516,
@@ -3414,13 +3028,6 @@
               0.27098709677419075,
               2.8057238709677397,
               4.133519999999995
-            ],
-            "NDFD": [
-              1.3340774193547915,
-              -1.1410451612903778,
-              -2.8481806451613436,
-              -0.22727741935489276,
-              1.3219225806451054
             ]
           },
           "ranking": [
@@ -3468,34 +3075,7 @@
             }
           ],
           "leadHours": 12,
-          "leadLabel": "12 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T23:00:30Z",
-              "snapshot": "960114b127bc0bb37d0b1d4a33e71ab1e69c5d40",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "12 h before verifying 12Z"
         },
         "24": {
           "dailyMae": {
@@ -3645,37 +3225,17 @@
             }
           ],
           "leadHours": 24,
-          "leadLabel": "24 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T06:22:48Z",
-              "snapshot": "0acbe429711ce61fe435bae12d0643a81995551f",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "24 h before verifying 12Z"
         },
         "36": {
           "dailyMae": {
+            "NDFD": [
+              1.735909677419339,
+              1.9712645161290454,
+              3.667535483871021,
+              0.9410838709677386,
+              1.395212903225784
+            ],
             "NBM Deterministic": [
               3.1542967741935506,
               5.034193548387093,
@@ -3717,16 +3277,16 @@
               1.1590141935483889,
               2.5306025806451626,
               3.7147354838709634
-            ],
-            "NDFD": [
-              1.735909677419339,
-              1.9712645161290454,
-              3.667535483871021,
-              0.9410838709677386,
-              1.395212903225784
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              1.0243999999999527,
+              -0.4055612903226358,
+              -3.667535483871021,
+              0.08239999999994592,
+              0.6057935483870408
+            ],
             "NBM Deterministic": [
               0.729754838709689,
               -4.002270967741929,
@@ -3768,13 +3328,6 @@
               0.43318451612903175,
               2.506703225806453,
               3.7147354838709634
-            ],
-            "NDFD": [
-              1.0243999999999527,
-              -0.4055612903226358,
-              -3.667535483871021,
-              0.08239999999994592,
-              0.6057935483870408
             ]
           },
           "ranking": [
@@ -3822,37 +3375,17 @@
             }
           ],
           "leadHours": 36,
-          "leadLabel": "36 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "36 h before verifying 12Z"
         },
         "48": {
           "dailyMae": {
+            "NDFD": [
+              1.6975870967742093,
+              1.2840645161290467,
+              3.667535483871021,
+              1.0940129032258226,
+              1.2991096774193571
+            ],
             "NBM Deterministic": [
               3.1475612903225856,
               4.401987096774192,
@@ -3894,16 +3427,16 @@
               1.260034838709674,
               1.9809638709677397,
               3.1096683870967645
-            ],
-            "NDFD": [
-              1.6975870967742093,
-              1.2840645161290467,
-              3.667535483871021,
-              1.0940129032258226,
-              1.2991096774193571
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              -0.9304387096774666,
+              -0.4055612903226358,
+              -3.667535483871021,
+              -0.3821161290323122,
+              -0.15549677419360441
+            ],
             "NBM Deterministic": [
               0.7611096774193703,
               -2.9269161290322536,
@@ -3945,13 +3478,6 @@
               -0.7725019354838691,
               1.9178593548387073,
               3.0876038709677327
-            ],
-            "NDFD": [
-              -0.9304387096774666,
-              -0.4055612903226358,
-              -3.667535483871021,
-              -0.3821161290323122,
-              -0.15549677419360441
             ]
           },
           "ranking": [
@@ -3999,37 +3525,17 @@
             }
           ],
           "leadHours": 48,
-          "leadLabel": "48 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T09:10:01Z",
-              "snapshot": "fec403881b625cd02f41cc364c3416eaeed9a6fc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "48 h before verifying 12Z"
         },
         "60": {
           "dailyMae": {
+            "NDFD": [
+              null,
+              1.8355741935484209,
+              3.6868903225806986,
+              1.124051612903235,
+              1.4804258064515736
+            ],
             "NBM Deterministic": [
               3.074632258064513,
               4.445651612903224,
@@ -4071,16 +3577,16 @@
               1.9495045161290283,
               3.116252903225807,
               3.9076838709677335
-            ],
-            "NDFD": [
-              null,
-              1.8355741935484209,
-              3.6868903225806986,
-              1.124051612903235,
-              1.4804258064515736
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              null,
+              -1.463625806451668,
+              -3.6868903225806986,
+              -0.33050322580650565,
+              1.1477290322580085
+            ],
             "NBM Deterministic": [
               -0.3003096774193416,
               -3.4251096774193495,
@@ -4122,13 +3628,6 @@
               1.891439999999996,
               3.116252903225807,
               3.9076838709677335
-            ],
-            "NDFD": [
-              null,
-              -1.463625806451668,
-              -3.6868903225806986,
-              -0.33050322580650565,
-              1.1477290322580085
             ]
           },
           "ranking": [
@@ -4176,30 +3675,7 @@
             }
           ],
           "leadHours": 60,
-          "leadLabel": "60 h before verifying 12Z",
-          "ndfdHistory": [
-            null,
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day3"
-            }
-          ]
+          "leadLabel": "60 h before verifying 12Z"
         }
       },
       "leadHours": [
@@ -4212,7 +3688,7 @@
       "defaultLeadHours": 24,
       "leadLabel": "24 h before verifying 12Z MinT",
       "sampleMode": "land",
-      "method": "CWA land-only sample nodes; NBM lead-time guidance is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z. NDFD is retained as a 24-hour reference."
+      "method": "CWA land-only sample nodes; NDFD uses the most recent repository forecast.json snapshot generated at or before each 12/24/36/48/60-hour target lead and selects the dated overnight period ending on the verifying day. NBM uses its corresponding archived model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z."
     },
     "TAE": {
       "dates": [
@@ -4371,6 +3847,13 @@
       "byLead": {
         "12": {
           "dailyMae": {
+            "NDFD": [
+              1.640380952380918,
+              1.4371700680271755,
+              1.101741496598613,
+              1.2166394557822817,
+              1.2716734693877487
+            ],
             "NBM Deterministic": [
               5.217918367346946,
               4.784448979591842,
@@ -4412,16 +3895,16 @@
               2.390816326530604,
               3.4373510204081668,
               5.748844897959182
-            ],
-            "NDFD": [
-              1.640380952380918,
-              1.4371700680271755,
-              1.101741496598613,
-              1.2166394557822817,
-              1.2716734693877487
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              1.3714829931972243,
+              1.1067210884353185,
+              0.6829931972788538,
+              0.9901360544217193,
+              -0.04051700680276986
+            ],
             "NBM Deterministic": [
               4.938489795918379,
               4.397265306122457,
@@ -4463,13 +3946,6 @@
               2.390816326530604,
               3.4373510204081668,
               5.748844897959182
-            ],
-            "NDFD": [
-              1.3714829931972243,
-              1.1067210884353185,
-              0.6829931972788538,
-              0.9901360544217193,
-              -0.04051700680276986
             ]
           },
           "ranking": [
@@ -4517,34 +3993,7 @@
             }
           ],
           "leadHours": 12,
-          "leadLabel": "12 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T23:00:30Z",
-              "snapshot": "960114b127bc0bb37d0b1d4a33e71ab1e69c5d40",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "12 h before verifying 12Z"
         },
         "24": {
           "dailyMae": {
@@ -4694,37 +4143,17 @@
             }
           ],
           "leadHours": 24,
-          "leadLabel": "24 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day1"
-            },
-            {
-              "issueUtc": "2026-11-14T06:22:48Z",
-              "snapshot": "0acbe429711ce61fe435bae12d0643a81995551f",
-              "period": "day1"
-            }
-          ]
+          "leadLabel": "24 h before verifying 12Z"
         },
         "36": {
           "dailyMae": {
+            "NDFD": [
+              1.7912653061224446,
+              1.929795918367299,
+              1.6508027210884257,
+              1.322353741496563,
+              2.2465850340135702
+            ],
             "NBM Deterministic": [
               5.644530612244906,
               4.7440408163265415,
@@ -4766,16 +4195,16 @@
               3.170130612244893,
               3.2165877551020428,
               5.039914285714291
-            ],
-            "NDFD": [
-              1.7912653061224446,
-              1.929795918367299,
-              1.6508027210884257,
-              1.322353741496563,
-              2.2465850340135702
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              0.3306666666666122,
+              1.8482176870747742,
+              0.5537414965985817,
+              1.1397959183672974,
+              2.04791836734689
+            ],
             "NBM Deterministic": [
               5.545836734693884,
               4.3152244897959315,
@@ -4817,13 +4246,6 @@
               3.1687102040816275,
               3.2165877551020428,
               5.039914285714291
-            ],
-            "NDFD": [
-              0.3306666666666122,
-              1.8482176870747742,
-              0.5537414965985817,
-              1.1397959183672974,
-              2.04791836734689
             ]
           },
           "ranking": [
@@ -4871,37 +4293,17 @@
             }
           ],
           "leadHours": 36,
-          "leadLabel": "36 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T23:55:23Z",
-              "snapshot": "3311411591cf5e42697d941482c9c61d6f3a9b34",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "36 h before verifying 12Z"
         },
         "48": {
           "dailyMae": {
+            "NDFD": [
+              1.7912653061224446,
+              1.3650340136054113,
+              1.6508027210884257,
+              1.6522585034013209,
+              1.6067755102040675
+            ],
             "NBM Deterministic": [
               5.992775510204091,
               5.149102040816335,
@@ -4943,16 +4345,16 @@
               2.1078734693877506,
               2.1979836734693863,
               4.624616326530611
-            ],
-            "NDFD": [
-              1.7912653061224446,
-              1.3650340136054113,
-              1.6508027210884257,
-              1.6522585034013209,
-              1.6067755102040675
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              0.3306666666666122,
+              0.936653061224434,
+              0.5537414965985817,
+              1.5275510204081137,
+              0.1771700680271621
+            ],
             "NBM Deterministic": [
               5.882571428571441,
               4.9066530612245,
@@ -4994,13 +4396,6 @@
               1.9463387755101995,
               2.1979836734693863,
               4.624616326530611
-            ],
-            "NDFD": [
-              0.3306666666666122,
-              0.936653061224434,
-              0.5537414965985817,
-              1.5275510204081137,
-              0.1771700680271621
             ]
           },
           "ranking": [
@@ -5048,37 +4443,17 @@
             }
           ],
           "leadHours": 48,
-          "leadLabel": "48 h before verifying 12Z",
-          "ndfdHistory": [
-            {
-              "issueUtc": "2026-11-09T09:10:01Z",
-              "snapshot": "fec403881b625cd02f41cc364c3416eaeed9a6fc",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-10T09:51:10Z",
-              "snapshot": "0f1c67161bfc7b73711ad651c7b33ec6bb17b98f",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-11T10:57:34Z",
-              "snapshot": "e9a50ddc529ae9e6bde89c40764aa96bddcce160",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-12T08:21:21Z",
-              "snapshot": "a8978894dca7b96c4cbbf0a00b362a3ca86e5ca9",
-              "period": "day2"
-            },
-            {
-              "issueUtc": "2026-11-13T10:59:15Z",
-              "snapshot": "9f6e0edcad7c36dd37a7f0998687e1f89f88fef3",
-              "period": "day2"
-            }
-          ]
+          "leadLabel": "48 h before verifying 12Z"
         },
         "60": {
           "dailyMae": {
+            "NDFD": [
+              null,
+              1.4924081632653194,
+              1.6461768707482998,
+              1.7888027210883926,
+              1.9399455782312567
+            ],
             "NBM Deterministic": [
               5.640612244897966,
               4.588530612244903,
@@ -5120,16 +4495,16 @@
               4.821599999999996,
               3.946359183673472,
               5.974530612244902
-            ],
-            "NDFD": [
-              null,
-              1.4924081632653194,
-              1.6461768707482998,
-              1.7888027210883926,
-              1.9399455782312567
             ]
           },
           "dailyBias": {
+            "NDFD": [
+              null,
+              -0.32185034013611,
+              0.1659863945577654,
+              1.690816326530563,
+              1.7690068027210395
+            ],
             "NBM Deterministic": [
               5.358489795918374,
               4.2625714285714364,
@@ -5171,13 +4546,6 @@
               4.821599999999996,
               3.946359183673472,
               5.974530612244902
-            ],
-            "NDFD": [
-              null,
-              -0.32185034013611,
-              0.1659863945577654,
-              1.690816326530563,
-              1.7690068027210395
             ]
           },
           "ranking": [
@@ -5225,30 +4593,7 @@
             }
           ],
           "leadHours": 60,
-          "leadLabel": "60 h before verifying 12Z",
-          "ndfdHistory": [
-            null,
-            {
-              "issueUtc": "2026-11-09T18:49:57Z",
-              "snapshot": "e46ec022399a82388ec38be0c35ecb3858a25b88",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-10T23:21:44Z",
-              "snapshot": "36743031a75218f3ca06579a98ae66012374bfdc",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-11T18:43:39Z",
-              "snapshot": "d20efdba3ffa333b5c9c54f741f5689d826e4bab",
-              "period": "day3"
-            },
-            {
-              "issueUtc": "2026-11-12T22:45:33Z",
-              "snapshot": "677de6f37d47590902fd808def649526d664ed86",
-              "period": "day3"
-            }
-          ]
+          "leadLabel": "60 h before verifying 12Z"
         }
       },
       "leadHours": [
@@ -5261,13 +4606,10 @@
       "defaultLeadHours": 24,
       "leadLabel": "24 h before verifying 12Z MinT",
       "sampleMode": "land",
-      "method": "CWA land-only sample nodes; NBM lead-time guidance is compared with minimum hourly RTMA 2-m temperature from 00Z–12Z. NDFD is retained as a 24-hour reference."
+      "method": "CWA land-only sample nodes; NDFD uses the most recent repository forecast.json snapshot generated at or before each 12/24/36/48/60-hour target lead and selects the dated overnight period ending on the verifying day. NBM uses its corresponding archived model cycle. Both are compared with minimum hourly RTMA 2-m temperature from 00Z–12Z."
     }
   },
   "errors": [
-    "2026-11-11 F060: no forecast snapshot",
-    "2026-11-11 F060: no forecast snapshot"
-  ],
-  "ndfdHistorySource": "Repository forecast.json snapshots",
-  "ndfdHistoryGeneratedUtc": "2026-11-16T07:11:04Z"
+    "2026-11-11 NDFD F060: no forecast.json snapshot at or before target lead containing verifying night"
+  ]
 }
