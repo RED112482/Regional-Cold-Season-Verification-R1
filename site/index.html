@@ -212,13 +212,19 @@
     <aside class="side">
       <div class="section"><div class="section-title">Forecast Office</div><div id="productCwaChips" class="chips"></div><div id="productSeasonCount" class="small" style="margin-top:7px">MOB cold-season VTEC events</div></div>
       <div class="section"><div class="section-title">Product Types</div><div id="productFilters" class="product-controls"></div><div class="small" style="margin-top:7px"><b>ETN mode:</b> only the selected ETN is drawn on the map.</div></div>
+      <div class="section">
+        <div class="section-title">County / Zone Product Counter</div>
+        <select id="productCounterType" style="width:100%;background:#111d28;border:1px solid #41566b;color:#e8f2fa;border-radius:6px;padding:7px 8px;font-family:Poppins,sans-serif"></select>
+        <div class="small" style="margin-top:6px">Number of distinct seasonal VTEC events that included each county/zone. Updates/amendments to the same ETN count once.</div>
+        <div id="productCounterList" class="guidance-list" style="margin-top:8px"><div class="small">Loading event polygons…</div></div>
+      </div>
       <div class="section"><div class="section-title">Events</div><div id="eventList" class="event-list"><div class="small">Loading live VTEC events…</div></div></div>
       <div class="section"><div class="section-title">Point Verification</div><div id="eventDetail" class="event-detail">Select an event. Verification uses observations valid inside the single VTEC event window, even when it crosses midnight.</div><div class="supp-toggle-grid">
           <label class="toggle"><input id="showCoopSupplement" type="checkbox" checked> COOP daily lows</label>
           <label class="toggle"><input id="showRwisSupplement" type="checkbox" checked> RWIS exact-window</label>
           <label class="toggle"><input id="showUscrnSupplement" type="checkbox" checked> USCRN exact-window</label>
           <label class="toggle"><input id="showDcpSupplement" type="checkbox" checked> IEM DCP/Mesonet air temp</label>
-          <label class="toggle"><input id="showCwopSupplement" type="checkbox" checked> Synoptic CWOP/APRS</label>
+          <label class="toggle"><input id="showCwopSupplement" type="checkbox" checked> Synoptic Mesonet / CWOP</label>
         </div>
         <div class="duration-toggle">
           <label class="toggle"><input id="showVerificationLabels" type="checkbox" checked> Show values + HIT/MISS on map</label>
@@ -357,7 +363,7 @@ document.getElementById('showVerificationDuration').addEventListener('change',()
 }
 function switchTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(tab+'Page').classList.add('active');setTimeout(()=>{if(tab==='frequency')state.frequencyMap.invalidateSize();if(tab==='products')state.productsMap.invalidateSize();if(tab==='forecast'){state.forecastMap.invalidateSize();renderForecast()}if(tab==='frost'){state.frostMap.invalidateSize();renderFrost()}},80)}
 function buildCwaChips(){const el=document.getElementById('freqCwaChips');el.innerHTML=['ALL'].concat(state.config.wfos).map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.cwaFilter=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.frequencyMap,state.cwaFilter);renderFrequency()}));}
-function buildProductCwaChips(){const el=document.getElementById('productCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',async()=>{state.productCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.productsMap,state.productCwa);await loadLiveEvents(state.productCwa,Number(document.getElementById('seasonSelect').value),state.fallbackHazards)}));}
+function buildProductCwaChips(){const el=document.getElementById('productCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',async()=>{state.productCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.productsMap,state.productCwa);const list=document.getElementById('productCounterList');if(list)list.innerHTML='<div class="small">Loading event polygons…</div>';await loadLiveEvents(state.productCwa,Number(document.getElementById('seasonSelect').value),state.fallbackHazards)}));}
 function buildForecastCwaChips(){const el=document.getElementById('forecastCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.forecastCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.forecastMap,state.forecastCwa);renderForecast()}));}
 function buildFrostCwaChips(){const el=document.getElementById('frostCwaChips');el.innerHTML=state.config.wfos.map(c=>'<button class="chip '+(c==='MOB'?'active':'')+'" data-cwa="'+c+'">'+c+'</button>').join('');el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{state.frostCwa=b.dataset.cwa;el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));fitMapToCwa(state.frostMap,state.frostCwa);renderFrost()}));}
 async function loadForecastData(){try{const r=await fetch('./data/forecast.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);state.forecastData=await r.json();await loadOfficialForecastZones();updateForecastPeriodLabels();updateFrostPeriodLabels();renderForecast();renderFrost();fitMapToCwa(state.forecastMap,state.forecastCwa);fitMapToCwa(state.frostMap,state.frostCwa)}catch(e){document.getElementById('forecastUpdated').textContent='NDFD guidance unavailable';document.getElementById('forecastGuidanceList').innerHTML='<div class="small">'+esc(err(e))+'</div>'}}
@@ -378,7 +384,19 @@ function setForecastPeriod(period){state.forecastPeriod=period;document.querySel
 function updateFrostPeriodLabels(){if(!state.forecastData)return;const slots=availableForecastPeriods(),buttons=[...document.querySelectorAll('[data-frost-period]')];buttons.forEach((btn,i)=>{const slot=slots[i];if(!slot){btn.style.display='none';return}btn.style.display='block';btn.dataset.frostPeriod=slot.key;const label=i===0?'TONIGHT':i===1?'TOMORROW NIGHT':forecastWeeknight(slot.p.startDate);btn.textContent=label+' · '+forecastRangeShort(slot.p);btn.classList.toggle('active',state.frostPeriod===slot.key)});if(!slots.some(x=>x.key===state.frostPeriod)&&slots.length){state.frostPeriod=slots[0].key;buttons.forEach((b,i)=>b.classList.toggle('active',i===0))}}
 function setFrostPeriod(period){state.frostPeriod=period;document.querySelectorAll('[data-frost-period]').forEach(btn=>btn.classList.toggle('active',btn.dataset.frostPeriod===period));renderFrost()}
 function buildForecastProductFilters(){const el=document.getElementById('forecastProductFilters'),names=['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'];el.innerHTML=names.map(n=>'<label class="product-toggle forecast-product-filter"><input type="checkbox" data-forecast-product="'+esc(n)+'" '+(state.forecastProducts.has(n)?'checked':'')+'> '+n+'</label>').join('');el.querySelectorAll('input').forEach(box=>box.addEventListener('change',()=>{const n=box.dataset.forecastProduct;if(box.checked)state.forecastProducts.add(n);else state.forecastProducts.delete(n);renderForecast()}))}
-function buildProductFilters(){const el=document.getElementById('productFilters'),current=['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'],legacy=['Legacy Wind Chill','Legacy Hard Freeze'];const row=n=>'<label class="product-toggle"><input type="checkbox" data-product="'+esc(n)+'" '+(state.productTypes.has(n)?'checked':'')+'><span class="swatch" style="background:'+PRODUCT_STYLE[n].color+'"></span>'+esc(n)+'</label>';el.innerHTML=current.map(row).join('')+'<details class="legacy-products"><summary>Legacy Products · off by default</summary><div class="legacy-inner">'+legacy.map(row).join('')+'</div></details>';el.querySelectorAll('input').forEach(box=>box.addEventListener('change',()=>{if(box.checked)state.productTypes.add(box.dataset.product);else state.productTypes.delete(box.dataset.product);if(state.selectedEvent&&!state.productTypes.has(state.selectedEvent.type))state.selectedEvent=null;renderEventList();renderProducts()}));}
+function buildProductFilters(){
+  const el=document.getElementById('productFilters'),
+        current=['Frost Advisory','Freeze Watch','Freeze Warning','Cold Weather Advisory','Extreme Cold Watch','Extreme Cold Warning'],
+        legacy=['Legacy Wind Chill','Legacy Hard Freeze'],
+        row=n=>'<label class="product-toggle"><input type="checkbox" data-product="'+esc(n)+'" '+(state.productTypes.has(n)?'checked':'')+'><span class="swatch" style="background:'+PRODUCT_STYLE[n].color+'"></span>'+esc(n)+'</label>';
+  el.innerHTML=current.map(row).join('')+'<details class="legacy-products"><summary>Legacy Products · off by default</summary><div class="legacy-inner">'+legacy.map(row).join('')+'</div></details>';
+  el.querySelectorAll('input').forEach(box=>box.addEventListener('change',()=>{if(box.checked)state.productTypes.add(box.dataset.product);else state.productTypes.delete(box.dataset.product);if(state.selectedEvent&&!state.productTypes.has(state.selectedEvent.type))state.selectedEvent=null;renderEventList();renderProducts()}));
+  const counter=document.getElementById('productCounterType');
+  if(counter){
+    counter.innerHTML=current.concat(legacy).map((n,i)=>'<option value="'+esc(n)+'" '+(n==='Freeze Warning'?'selected':'')+'>'+esc(n)+'</option>').join('');
+    counter.addEventListener('change',renderProductCounter);
+  }
+}
 
 function strictFrequencyCountyForPoint(data,lon,lat){
   if(!data||!data.countiesGeoJson||!isNum(Number(lon))||!isNum(Number(lat)))return null;
@@ -453,9 +471,10 @@ async function mergeCwopDailyIntoFrequency(data){
         other.stationDaily=(other.stationDaily||[]).filter(x=>String(x.obs||x.id)!==stid);
       });
       row.stations=row.stations||[];row.stationDaily=row.stationDaily||[];
-      row.stations.push({id:stid,obs:stid,name:meta.name||stid,type:'CWOP',network:'SYNOPTIC_CWOP',lat,lon});
+      const provider=String(meta.provider||''),networkId=String(meta.networkId||''),suppType=(networkId==='65'||provider.toUpperCase().includes('CWOP'))?'CWOP':'MESONET';
+      row.stations.push({id:stid,obs:stid,name:meta.name||stid,type:suppType,network:'SYNOPTIC_CWOP',lat,lon});
       const existing=row.stationDaily.find(x=>String(x.obs||x.id)===stid);
-      const st={id:stid,obs:stid,name:meta.name||stid,type:'CWOP',network:'SYNOPTIC_CWOP',lat,lon,dailyMinTemp:stTemp,dailyMinFeel:stFeel};
+      const st={id:stid,obs:stid,name:meta.name||stid,type:suppType,network:'SYNOPTIC_CWOP',lat,lon,dailyMinTemp:stTemp,dailyMinFeel:stFeel};
       if(existing)Object.assign(existing,st);else row.stationDaily.push(st);
       row.coverage='inside';row.nearestMiles=null;
       row.dailyMinTemp=row.dailyMinTemp||Array(dates.length).fill(null);row.dailyMinFeel=row.dailyMinFeel||Array(dates.length).fill(null);
@@ -639,9 +658,53 @@ async function loadLiveEvents(wfo,seasonStartYear,fallbackKml){state.selectedEve
 async function loadEventGeometries(events){for(let i=0;i<events.length;i+=4){const batch=events.slice(i,i+4);await Promise.all(batch.map(e=>fetchEventGeo(e)));renderProducts()}}
 async function fetchEventGeo(e){if(!e)return null;if(e.geojson)return e.geojson;if(state.eventGeoCache.has(e.id)){e.geojson=state.eventGeoCache.get(e.id);return e.geojson}if(!e.phenom||!e.sig||!Number.isFinite(e.etn))return null;try{const u='https://mesonet.agron.iastate.edu/geojson/vtec_event.py?wfo='+encodeURIComponent(e.wfo)+'&year='+e.vtecYear+'&phenomena='+encodeURIComponent(e.phenom)+'&significance='+encodeURIComponent(e.sig)+'&etn='+e.etn;const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const g=await r.json();e.geojson=g;state.eventGeoCache.set(e.id,g);return g}catch(err){console.warn('Event geometry unavailable',e.id,err);return null}}
 function eventFeatures(e){if(e&&e.geojson&&Array.isArray(e.geojson.features))return e.geojson.features.filter(f=>f&&f.geometry);if(e&&e.geometry)return[{type:'Feature',properties:{},geometry:e.geometry}];return[]}
+function eventAreaLabels(e){
+  const labels=new Set(),features=eventFeatures(e);
+  for(const f of features){
+    const p=f.properties||{};
+    const raw=p.ugc||p.UGC||p.ugc_code||p.UGC_CODE||p.zone||p.ZONE||p.name||p.NAME||p.county||p.COUNTY||p.area||p.AREA;
+    if(raw){
+      String(raw).split(/[;,]/).map(x=>x.trim()).filter(Boolean).forEach(x=>labels.add(x));
+    }
+  }
+  if(labels.size)return labels;
+
+  // Fallback for event GeoJSON without an area identifier: use NOAA county
+  // centroids and count the event once for any county centroid inside it.
+  const geo=state.data&&state.data.countiesGeoJson;
+  for(const county of (geo?.features||[])){
+    const p=county.properties||{};
+    if(String(p.cwa||'').toUpperCase()!==String(e.wfo||'').toUpperCase())continue;
+    const lon=Number(p.lon),lat=Number(p.lat);
+    if(!Number.isFinite(lon)||!Number.isFinite(lat))continue;
+    if(features.some(f=>pointInFeature(lon,lat,f))){
+      labels.add((p.countyname||p.name||p.fips||'Unknown')+(p.state?' · '+p.state:''));
+    }
+  }
+  return labels;
+}
+function renderProductCounter(){
+  const el=document.getElementById('productCounterList'),sel=document.getElementById('productCounterType');
+  if(!el||!sel)return;
+  const type=sel.value,events=(state.events||[]).filter(e=>e.type===type),counts=new Map();
+  let pending=0;
+  for(const e of events){
+    if(!eventFeatures(e).length){pending++;continue}
+    const areas=eventAreaLabels(e);
+    for(const area of areas)counts.set(area,(counts.get(area)||0)+1);
+  }
+  const rows=[...counts.entries()].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0])));
+  if(!rows.length){
+    el.innerHTML='<div class="small">'+(pending?'Loading '+pending+' event polygon'+(pending===1?'':'s')+'…':'No '+esc(type)+' areas found this season.')+'</div>';
+    return;
+  }
+  el.innerHTML=rows.map(([area,count])=>'<div class="guidance-row"><span>'+esc(area)+'</span><strong>'+count+'</strong></div>').join('')+
+    (pending?'<div class="small" style="margin-top:6px">+'+pending+' event polygon'+(pending===1?'':'s')+' still loading.</div>':'');
+}
+
 function renderEventList(){const list=document.getElementById('eventList');const visible=state.events.filter(e=>state.productTypes.has(e.type));if(!visible.length){list.innerHTML='<div class="small">No selected cold-product VTEC events found for '+esc(state.productCwa)+'.</div>';return}list.innerHTML=visible.map(e=>{const p=e.pointSummary;let verification=p?(' · '+p.hits+'H/'+(p.misses||0)+'M'):'';return'<div class="event '+(state.selectedEvent&&state.selectedEvent.id===e.id?'active':'')+'" data-event="'+esc(e.id)+'"><div class="event-head"><span>'+esc(e.type)+'</span><span class="event-pill neutral">ETN '+esc(e.etn)+verification+'</span></div><div class="event-sub">'+esc(eventTimeLabel(e))+'</div></div>'}).join('');list.querySelectorAll('.event').forEach(el=>el.addEventListener('click',()=>selectEvent(el.dataset.event)))}
 async function selectEvent(id){const e=state.events.find(x=>x.id===id);if(!e)return;state.selectedEvent=e;state.eventPointResults=[];state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';document.getElementById('eventCountyCount').textContent='—';document.getElementById('eventHitCount').textContent='—';renderEventList();await fetchEventGeo(e);renderProducts();if(e.geojson){const layer=L.geoJSON(e.geojson);const b=layer.getBounds();if(b.isValid())state.productsMap.fitBounds(b,{padding:[30,30]})}await loadEventPointVerification(e)}
-function renderProducts(){if(state.productLayer)state.productsMap.removeLayer(state.productLayer);const selected=state.selectedEvent,features=[];if(selected&&state.productTypes.has(selected.type))eventFeatures(selected).forEach(f=>features.push({type:'Feature',geometry:f.geometry,properties:Object.assign({},f.properties||{},{eventId:selected.id,eventType:selected.type})}));state.productLayer=L.geoJSON({type:'FeatureCollection',features},{pane:'hazardPane',style:f=>{const e=state.events.find(x=>x.id===f.properties.eventId),st=PRODUCT_STYLE[(e||{}).type]||{color:'#9fb2c6'};return{color:st.color,weight:3.2,opacity:1,fillColor:st.color,fillOpacity:.24}},onEachFeature:(f,l)=>{const e=state.events.find(x=>x.id===f.properties.eventId);if(!e)return;l.bindTooltip(e.type+' · ETN '+e.etn+' · '+eventTimeLabel(e),{sticky:true,className:'county-tip'})}}).addTo(state.productsMap);renderSelectedEventDetail()}
+function renderProducts(){renderProductCounter();if(state.productLayer)state.productsMap.removeLayer(state.productLayer);const selected=state.selectedEvent,features=[];if(selected&&state.productTypes.has(selected.type))eventFeatures(selected).forEach(f=>features.push({type:'Feature',geometry:f.geometry,properties:Object.assign({},f.properties||{},{eventId:selected.id,eventType:selected.type})}));state.productLayer=L.geoJSON({type:'FeatureCollection',features},{pane:'hazardPane',style:f=>{const e=state.events.find(x=>x.id===f.properties.eventId),st=PRODUCT_STYLE[(e||{}).type]||{color:'#9fb2c6'};return{color:st.color,weight:3.2,opacity:1,fillColor:st.color,fillOpacity:.24}},onEachFeature:(f,l)=>{const e=state.events.find(x=>x.id===f.properties.eventId);if(!e)return;l.bindTooltip(e.type+' · ETN '+e.etn+' · '+eventTimeLabel(e),{sticky:true,className:'county-tip'})}}).addTo(state.productsMap);renderSelectedEventDetail()}
 function renderSelectedEventDetail(){const e=state.selectedEvent;if(!e){document.getElementById('eventDetail').textContent='Select an event. Each row is one VTEC lifecycle from valid start through final valid end, even when it crosses midnight.';document.getElementById('eventCountyCount').textContent='—';document.getElementById('eventHitCount').textContent='—';document.getElementById('pointList').innerHTML='';return}const live=Date.parse(e.end)>Date.now();const browser='https://mesonet.agron.iastate.edu/vtec/?year='+e.vtecYear+'&wfo='+e.wfo+'&phenomena='+e.phenom+'&significance='+e.sig+'&eventid='+String(e.etn).padStart(4,'0');document.getElementById('eventDetail').innerHTML='<b>'+esc(e.type)+'</b> · ETN '+e.etn+(live?'<span class="live-tag">IN EFFECT</span>':'')+'<br>'+esc(eventTimeLabel(e))+'<br><a class="event-source-link" href="'+browser+'" target="_blank" rel="noopener">OPEN IEM VTEC EVENT ↗</a>'}
 async function ensureStationCatalog(){if(state.stationCatalog)return state.stationCatalog;await loadStationCatalog();return state.stationCatalog}
 
