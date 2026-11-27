@@ -949,13 +949,35 @@ function nearestMetarSky(lat,lon,time){
   }
   return best;
 }
+async function loadHistoricalCwop(wfo,start,finish){
+  const recent=await ensureCwopData(wfo),stations=new Map((recent.stations||[]).map(x=>[String(x.id),x])),rows=new Map();
+  const put=o=>{const t=Date.parse(o.time);if(t>=+start&&t<=+finish)rows.set(String(o.id)+'|'+t,o)};
+  (recent.observations||[]).forEach(put);
+  const dates=[];
+  for(let d=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth(),start.getUTCDate()));d<=finish;d=new Date(+d+86400000))dates.push(d.toISOString().slice(0,10));
+  const missing=[];
+  for(let i=0;i<dates.length;i+=3)await Promise.all(dates.slice(i,i+3).map(async day=>{
+    try{
+      const r=await fetch('./data/cwop/history/'+encodeURIComponent(wfo)+'/'+day+'.json',{cache:'no-store'});
+      if(!r.ok)throw Error('HTTP '+r.status);
+      const p=await r.json();
+      (p.stations||[]).forEach(x=>stations.set(String(x.id),x));
+      (p.rows||[]).forEach(([id,time,tempF,dewF,rh,windKt])=>put({id,time,tempF,dewF,rh,windKt}));
+      if(!p.complete)missing.push(day+' (partial)');
+    }catch(e){const covered=(recent.eventWindows||[]).some(w=>Date.parse(w.start)<=Math.max(+start,Date.parse(day+'T00:00:00Z'))&&Date.parse(w.end)>=Math.min(+finish,Date.parse(day+'T00:00:00Z')+86400000));if(!covered)missing.push(day)}
+  }));
+  return {stations:[...stations.values()],observations:[...rows.values()],missing};
+}
 async function loadCwopSupplement(e,start,finish){
-  const data=await ensureCwopData(e.wfo),stations=new Map((data.stations||[]).map(x=>[String(x.id),x])),groups=new Map();
+  const data=await loadHistoricalCwop(e.wfo,start,finish);
+  if(state.selectedEvent!==e||state.productDisplay==='count')return;
+  if(data.missing.length)document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small">Supplemental history incomplete: '+esc(data.missing.join(', '))+'. Daily lows are not substituted for ETN observations.</div>');
+  const stations=new Map((data.stations||[]).map(x=>[String(x.id),x])),groups=new Map();
   for(const o of (data.observations||[])){
     const t=new Date(o.time);if(isNaN(t)||t<start||t>finish)continue;
     const st=stations.get(String(o.id))||o;
     if(!pointInCwa(e.wfo,Number(st.lon),Number(st.lat)))continue;
-    if(!groups.has(o.id))groups.set(o.id,{site:{id:o.id,name:o.id,lat:Number(st.lat),lon:Number(st.lon)},rows:[]});
+    if(!groups.has(o.id))groups.set(o.id,{site:{id:o.id,name:st.name||o.id,lat:Number(st.lat),lon:Number(st.lon)},rows:[]});
     groups.get(o.id).rows.push(o);
   }
   if(!groups.size){document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small">Synoptic CWOP/APRS: no observations found in this ETN window for '+esc(e.wfo)+'.</div>')}
