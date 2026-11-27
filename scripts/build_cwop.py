@@ -407,6 +407,104 @@ def update_daily_archive(stations, now):
     print("CWOP daily archive:", len(daily), "stations", DAILY_OUT.stat().st_size, "bytes")
 
 
+def backfill_event_days(stations, now):
+    """Cache timestamped observations by UTC day and CWA, independent of KML.
+    One-time backfill starts September 1; completed days are not re-requested.
+    Store only temperature, dewpoint, humidity and wind needed by verification.
+    """
+    import concurrent.futures
+    root = OUT_DIR / "history"
+    root.mkdir(parents=True, exist_ok=True)
+    start = current_season_start(now).date()
+    today = now.date()
+    # Prioritize the reported November 15 case, then fill the season backwards.
+    days = [start + timedelta(days=i) for i in range((today-start).days+1)]
+    days.reverse()
+    target = datetime(now.year, 11, 15).date()
+    if target in days:
+        days.remove(target)
+        days.insert(0, target)
+    # Bound each scheduled run to prevent an unbounded archive rebuild.
+    pending = [day for day in days if day >= today-timedelta(days=1) or not (root / (day.isoformat()+".complete")).exists()][:5]
+    ids = sorted(stations)
+    for day in pending:
+        begin = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        end = min(begin+timedelta(days=1), now)
+        if end <= begin:
+            continue
+        def fetch_batch(batch):
+            d = get_json("stations/timeseries", {
+                "stid": ",".join(batch), "start": begin.strftime("%Y%m%d%H%M"),
+                "end": end.strftime("%Y%m%d%H%M"),
+                "vars": "air_temp,dew_point_temperature,relative_humidity,wind_speed",
+                "units": "english,speed|kts", "obtimezone": "UTC",
+                "qc_checks": "synopticlabs,madis", "showemptyvars": "1"})
+            if str((d.get("SUMMARY") or {}).get("RESPONSE_CODE", "")) != "1":
+                raise RuntimeError("Synoptic history batch unavailable")
+            rows = []
+            for station in d.get("STATION", []):
+                sid = str(station.get("STID") or "").upper()
+                if sid not in stations:
+                    continue
+                o = station.get("OBSERVATIONS") or {}
+                series = [first_series(o,k) or [] for k in ("air_temp","dew_point_temperature","relative_humidity","wind_speed")]
+                for i, ts in enumerate(o.get("date_time") or []):
+                    vals = [num(a[i]) if i<len(a) else None for a in series]
+                    if sane_air_temp_f(vals[0]) is None:
+                        continue
+                    try:
+                        dt = datetime.fromisoformat(ts.replace("Z","+00:00"))
+                    except (ValueError, AttributeError):
+                        continue
+                    if not begin <= dt < end:
+                        continue
+                    rows.append((sid, ts, *vals))
+            return rows
+        rows = []
+        failures = 0
+        # Keep API concurrency low and bound requests to daily chunks.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            for future in [pool.submit(fetch_batch,b) for b in chunked(ids,BATCH)]:
+                try:
+                    rows.extend(future.result())
+                except Exception as exc:
+                    failures += 1
+                    print("History batch failed", day, type(exc).__name__)
+        for cwa in CWAS:
+            out = root / cwa / (day.isoformat()+".json")
+            out.parent.mkdir(parents=True,exist_ok=True)
+            bykey = {}
+            if out.exists():
+                try:
+                    for r in json.loads(out.read_text()).get("rows",[]):
+                        bykey[(r[0],r[1])] = r
+                except Exception:
+                    pass
+            for r in rows:
+                if stations[r[0]]["cwa"] == cwa:
+                    bykey[(r[0],r[1])] = r
+            used = {r[0] for r in bykey.values()}
+            oldmeta = {}
+            if out.exists():
+                try:
+                    oldmeta = {x["id"]:x for x in json.loads(out.read_text()).get("stations",[])}
+                except Exception:
+                    pass
+            oldmeta.update({sid:stations[sid] for sid in used if sid in stations})
+            payload = {"stations":[oldmeta[sid] for sid in sorted(used) if sid in oldmeta],
+                       "rows":list(bykey.values()),"date":day.isoformat(),
+                       "complete": failures==0 and day<today-timedelta(days=1)}
+            tmp = out.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload,separators=(",",":")))
+            tmp.replace(out)
+        print("Historical UTC day",day,"samples",len(rows),"failed batches",failures)
+        for sid in ("G4508","E3034","AW815","G1930"):
+            sample = [r[2] for r in rows if r[0]==sid]
+            if sample:
+                print("Historical station",day,sid,"samples",len(sample),"daily UTC min F",min(sample))
+        if failures==0 and rows and day<today-timedelta(days=1):
+            (root / (day.isoformat()+".complete")).touch()
+
 def main():
     if not TOKEN:
         raise SystemExit("SYNOPTIC_TOKEN is not set")
@@ -444,6 +542,7 @@ def main():
     stations, errors = discover()
     print("Synoptic CWOP stations discovered:", len(stations))
     update_daily_archive(stations, now)
+    backfill_event_days(stations, now)
     if errors:
         print("Synoptic discovery/errors:")
         for e in errors:
