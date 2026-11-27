@@ -950,7 +950,7 @@ function nearestMetarSky(lat,lon,time){
   return best;
 }
 async function loadHistoricalCwop(wfo,start,finish){
-  const recent=await ensureCwopData(wfo),stations=new Map((recent.stations||[]).map(x=>[String(x.id),x])),rows=new Map();
+  const recentPromise=ensureCwopData(wfo);const recent=await recentPromise,stations=new Map((recent.stations||[]).map(x=>[String(x.id),x])),rows=new Map();
   const put=o=>{const t=Date.parse(o.time);if(t>=+start&&t<=+finish)rows.set(String(o.id)+'|'+t,o)};
   (recent.observations||[]).forEach(put);
   const dates=[];
@@ -976,17 +976,16 @@ async function loadCwopSupplement(e,start,finish){
   for(const o of (data.observations||[])){
     const t=new Date(o.time);if(isNaN(t)||t<start||t>finish)continue;
     const st=stations.get(String(o.id))||o;
-    if(!pointInCwa(e.wfo,Number(st.lon),Number(st.lat)))continue;
-    if(!groups.has(o.id))groups.set(o.id,{site:{id:o.id,name:st.name||o.id,lat:Number(st.lat),lon:Number(st.lon)},rows:[]});
+    if(!groups.has(o.id)){const lon=num(st.lon),lat=num(st.lat);if(!isNum(lon)||!isNum(lat))continue;const county=findCountyForPoint(lon,lat);if(!county||county.wfo!==e.wfo)continue;groups.set(o.id,{site:{id:o.id,name:st.name||o.id,lat,lon},county,rows:[]});}
     groups.get(o.id).rows.push(o);
   }
   if(!groups.size){document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small">Synoptic CWOP/APRS: no observations found in this ETN window for '+esc(e.wfo)+'.</div>')}
   const scored=[];
   for(const g of groups.values()){
-    const county=findCountyForPoint(g.site.lon,g.site.lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e);
+    const county=g.county,pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e);
     let minTemp=null,minFeel=null,maxPot=null,maxPotDetails=null,minTime=null,samples=[];
     for(const r of g.rows){
-      const t=saneAirTempF(r.tempF),td=saneAirTempF(r.dewF),w=num(r.windKt),tm=new Date(r.time),feel=windChillF(t,w),skyInfo=nearestMetarSky(g.site.lat,g.site.lon,tm),sky=skyInfo?skyInfo.sky:'',pot=observedPotFrostScore(t,td,w,sky);
+      const t=saneAirTempF(r.tempF),td=saneAirTempF(r.dewF),w=num(r.windKt),tm=new Date(r.time),feel=windChillF(t,w),skyInfo=crit.metric==='potfrost'?nearestMetarSky(g.site.lat,g.site.lon,tm):null,sky=skyInfo?skyInfo.sky:'',pot=crit.metric==='potfrost'?observedPotFrostScore(t,td,w,sky):null;
       if(isNum(t)&&(minTemp===null||t<minTemp)){minTemp=t;minTime=r.time}
       if(isNum(feel)&&(minFeel===null||feel<minFeel))minFeel=feel;
       if(isNum(pot)&&(maxPot===null||pot>maxPot)){maxPot=pot;maxPotDetails={t,td,w,sky,time:tm}}
@@ -1008,6 +1007,7 @@ async function loadCwopSupplement(e,start,finish){
   }
   if(state.selectedEvent!==e||state.productDisplay==='count')return;
   renderSupplementPoints(scored,'Synoptic Mesonet / CWOP','#62b7d9','#d2f2ff','CWOP');
+  document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small">Synoptic exact-window coverage: '+scored.filter(r=>r.hasData).length+' sites · '+data.observations.length+' reports.</div>');
 }
 async function loadEventPointVerification(e){renderSelectedEventDetail();resetVerificationTotals();state.primaryMetarSkySamples=[];state.sourceCounts={METAR:0,COOP:0,RWIS:0,USCRN:0,DCP:0,CWOP:0};updatePointSourceSummary();const start=new Date(e.begin),finish=new Date(Math.min(Date.parse(e.end),Date.now()));if(isNaN(start)||isNaN(finish)||finish<=start){showPointError('This event has not reached its valid observation window yet.');return}state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';let primaryResults=[];try{const cat=await ensureStationCatalog();if(cat){
   // Season Products primary METAR verification must only query true aviation
@@ -1067,7 +1067,7 @@ if(e.type==='Frost Advisory'){
   console.info('Frost PF primary summary',{stations:primaryResults.length,pfCount,skySamples:state.primaryMetarSkySamples.length});
   if(primaryResults.length&&pfCount===0)document.getElementById('pointList').innerHTML='<div class="small" style="color:#ffd84d"><b>PF diagnostic:</b> aviation observations loaded, but no PF values could be calculated. Sky samples: '+state.primaryMetarSkySamples.length+'.</div>';
 }
-state.eventPointResults=primaryResults;e.pointSummary={hits:primaryResults.filter(x=>x.resultCode==='HIT').length,misses:primaryResults.filter(x=>x.resultCode==='MISS').length,total:primaryResults.filter(x=>x.inHazard||x.criterionMet).length};renderEventList();renderEventPointResults(e,primaryResults);const jobs=[];if(document.getElementById('showCoopSupplement').checked)jobs.push(loadCoopSupplement(e));if(document.getElementById('showRwisSupplement').checked)jobs.push(loadRwisSupplement(e,start,finish));if(document.getElementById('showUscrnSupplement').checked)jobs.push(loadUscrnSupplement(e,start,finish));if(document.getElementById('showDcpSupplement').checked)jobs.push(loadDcpSupplement(e,start,finish));if(document.getElementById('showCwopSupplement').checked)jobs.push(loadCwopSupplement(e,start,finish));await Promise.allSettled(jobs);if(!primaryResults.some(x=>x.hasData)&&jobs.length===0)showPointError('No primary METAR points were available inside this event geometry.')}
+state.eventPointResults=primaryResults;e.pointSummary={hits:primaryResults.filter(x=>x.resultCode==='HIT').length,misses:primaryResults.filter(x=>x.resultCode==='MISS').length,total:primaryResults.filter(x=>x.inHazard||x.criterionMet).length};renderEventList();renderEventPointResults(e,primaryResults);const jobs=[];if(document.getElementById('showCoopSupplement').checked)jobs.push(loadCoopSupplement(e));if(document.getElementById('showRwisSupplement').checked)jobs.push(loadRwisSupplement(e,start,finish));if(document.getElementById('showUscrnSupplement').checked)jobs.push(loadUscrnSupplement(e,start,finish));if(document.getElementById('showDcpSupplement').checked)jobs.push(loadDcpSupplement(e,start,finish));if(document.getElementById('showCwopSupplement').checked)jobs.push(loadCwopSupplement(e,start,finish));const results=await Promise.allSettled(jobs);if(state.selectedEvent!==e||state.productDisplay==='count')return;for(const result of results){if(result.status==='rejected'){console.error('Supplemental verification failed',result.reason);document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small" style="color:#ffd84d">Supplemental verification failed: '+esc(err(result.reason))+'</div>')}}renderMissingFrequencySites(e);if(!primaryResults.some(x=>x.hasData)&&jobs.length===0)showPointError('No primary METAR points were available inside this event geometry.')}
 async function loadCoopSupplement(e){const valid=localDateFromIso(e.end||e.begin);if(!valid)return;try{let payload=state.coopCache.get(valid);if(!payload){const r=await fetch('https://mesonet.agron.iastate.edu/geojson/coopobs.py?valid='+encodeURIComponent(valid),{cache:'no-store'});if(!r.ok)throw new Error('COOP HTTP '+r.status);payload=await r.json();state.coopCache.set(valid,payload)}const rows=(payload.features||[]).filter(f=>f&&f.geometry&&f.geometry.type==='Point'&&pointInCwa(e.wfo,Number(f.geometry.coordinates[0]),Number(f.geometry.coordinates[1]))).map(f=>scoreCoopFeature(f,e));renderCoopSupplement(rows)}catch(ex){const list=document.getElementById('pointList');list.insertAdjacentHTML('beforeend','<div class="small">COOP supplemental data unavailable: '+esc(err(ex))+'</div>')}}
 function scoreCoopFeature(f,e){const p=f.properties||{},lon=Number(f.geometry.coordinates[0]),lat=Number(f.geometry.coordinates[1]),county=findCountyForPoint(lon,lat),pseudo={criteria:county?county.criteria:{},wfo:e.wfo},crit=pointCriterion(pseudo,e),low=num(p.low),criterionMet=crit.metric==='potfrost'?null:(isNum(low)&&isNum(crit.threshold)?low<=crit.threshold:null),base={station:String(p.station||f.id||'COOP'),name:String(p.name||'COOP'),network:String(p.network||'COOP'),lat,lon,minTemp:low,minFeel:null,value:low,valid:p.utc_valid||'',hour:p.hour,criterion:crit,criterionMet,hasData:isNum(low)};if(criterionMet===null)return Object.assign(base,{hit:null,resultCode:'SUPP',inHazard:eventContainsPoint(e,lon,lat)});const cls=classifyVerificationResult(base,e);return Object.assign(base,{hit:cls.hit,resultCode:cls.code,inHazard:cls.inHazard})}
 function findCountyForPoint(lon,lat){if(!state.data||!state.data.countiesGeoJson)return null;const feat=(state.data.countiesGeoJson.features||[]).find(f=>pointInFeature(lon,lat,f));if(!feat)return null;const id=String((feat.properties||{}).fips||'').padStart(5,'0');return state.data.countyStats?state.data.countyStats[id]:null}
@@ -1142,6 +1142,7 @@ function scoreSupplementPoint(site,minTemp,minFeel,time,e,source,samples=[]){
 function renderSupplementPoints(rows,label,fillColor,borderColor,sourceKey){
   const usable=rows.filter(r=>r.hasData),
         display=usable;
+  if(state.productDisplay==='count')return;
   if(sourceKey){state.sourceCounts[sourceKey]=usable.length;updatePointSourceSummary()}
   if(!display.length)return;
   addVerificationTotals(display);
@@ -1232,6 +1233,26 @@ function frostExplanationHtml(r){
 
 function pointCriterion(st,e){const c=st.criteria||{};if(e.type==='Frost Advisory')return{threshold:40,metric:'potfrost',label:'Observed PotFrost ≥40 (Areas/Widespread)'};if(e.type==='Freeze Watch'||e.type==='Freeze Warning')return{threshold:32,metric:'temp',label:'Freeze ≤32°F'};if(e.type==='Cold Weather Advisory')return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Local Cold Advisory'};if(e.type==='Extreme Cold Watch'||e.type==='Extreme Cold Warning')return{threshold:num(c.extremeCold),metric:'apparent',label:'Local Extreme Cold'};if(e.type==='Legacy Hard Freeze')return{threshold:25,metric:'temp',label:'Hard freeze ≤25°F'};return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Legacy wind chill proxy'}}
 function resetVerificationTotals(){state.verificationTotals={points:0,hits:0,warnings:0,misses:0}}
+function renderMissingFrequencySites(e){
+ if(state.selectedEvent!==e||state.productDisplay==='count'||!state.data)return;
+ const occupied=new Set(),ids=new Set(),key=(lat,lon)=>Number(lat).toFixed(4)+'|'+Number(lon).toFixed(4);
+ state.verificationLayer.eachLayer(l=>{if(typeof l.getLatLng==='function'&&typeof l.getRadius==='function'){const p=l.getLatLng();occupied.add(key(p.lat,p.lng));if(l._verificationStationId)ids.add(String(l._verificationStationId).toUpperCase())}});
+ let missing=0,inventory=0;
+ for(const county of Object.values(state.data.countyStats||{})){
+  if(county.wfo!==e.wfo)continue;
+  for(const st of activeFrequencyStations(county)){
+   const id=String(st.obs||st.id||'').toUpperCase(),k=key(st.lat,st.lon);
+   if(!id||ids.has(id))continue;
+   ids.add(id);inventory++;
+   if(occupied.has(k))continue;
+   occupied.add(k);missing++;
+   L.circleMarker([st.lat,st.lon],{pane:'verificationPane',radius:4,color:'#a5afb8',weight:1,fillColor:'#3d4b59',fillOpacity:.85})
+    .bindTooltip(esc(st.id)+' · '+esc(st.name)+' · No ETN result')
+    .bindPopup('<b>'+esc(st.id)+' · '+esc(st.name)+'</b><br>'+esc(st.type||'OBS')+' · '+esc(county.county)+'<br>No usable verification result was plotted for this ETN. Source may be disabled, unavailable, or lack exact-window data. Daily minima are not substituted.').addTo(state.verificationLayer);
+  }
+ }
+ document.getElementById('pointList').insertAdjacentHTML('beforeend','<div class="small">Frequency inventory: '+missing+' additional sites shown in gray (no ETN result; excluded from hit/miss totals).</div>');
+}
 function addVerificationTotals(rows){
   if(state.productDisplay==='count')return;
   if(!state.verificationTotals)resetVerificationTotals();
