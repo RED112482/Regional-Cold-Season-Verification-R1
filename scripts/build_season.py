@@ -569,7 +569,7 @@ def build_one_season(start_year: int, mode: str, counties: dict, catalog: dict, 
         "season": season,
         "queryEnd": query_end,
         "stationMode": mode,
-        "stationModeLabel": "ASOS / AWOS only" if mode == "asosawos" else "All available in-county observation sites",
+        "stationModeLabel": "ASOS / AWOS only" if mode == "asosawos" else "All available in-county observation sites (IEM + Synoptic/MADIS mesonets)",
         "dates": dates,
         "countiesUrl": "./data/counties.geojson",
         "hazardsUrl": f"./data/hazards/{start_year}.kml",
@@ -642,6 +642,9 @@ def build_seasons(years: list[int], modes: list[str], output_root: Path):
                 key = ("SYNOPTIC_CWOP", stid)
                 if key in existing:
                     continue
+                network_id = str(meta.get("networkId") or "")
+                provider = str(meta.get("provider") or "")
+                station_type = "CWOP" if network_id == "65" or "CWOP" in provider.upper() else "MESONET"
                 site = {
                     "obs": stid,
                     "displayId": stid,
@@ -650,7 +653,8 @@ def build_seasons(years: list[int], modes: list[str], output_root: Path):
                     "lon": lon,
                     "network": "SYNOPTIC_CWOP",
                     "state": county["state"],
-                    "type": "CWOP",
+                    "type": station_type,
+                    "provider": provider,
                     "wfo": county["cwa"],
                     "countyFips": county["fips"],
                     "countyName": county["countyname"],
