@@ -213,7 +213,7 @@
       <div class="section"><div class="section-title">Forecast Office</div><div id="productCwaChips" class="chips"></div><div id="productSeasonCount" class="small" style="margin-top:7px">MOB cold-season VTEC events</div></div>
       <div class="section"><div class="section-title">Product Types</div><div id="productFilters" class="product-controls"></div><div class="small" style="margin-top:7px"><b>ETN mode:</b> only the selected ETN is drawn on the map.</div></div>
       <div class="section">
-        <div class="section-title">County / Zone Product Counter</div>
+        <div class="section-title">Map Display</div><div class="period-toggle"><button id="productEventMode" class="period-btn active" type="button">EVENT VERIFICATION</button><button id="productCountMode" class="period-btn" type="button">ZONE COUNTS</button></div><div class="section-title" style="margin-top:9px">County / Zone Product Counter</div>
         <select id="productCounterType" style="width:100%;background:#111d28;border:1px solid #41566b;color:#e8f2fa;border-radius:6px;padding:7px 8px;font-family:Poppins,sans-serif"></select>
         <div class="small" style="margin-top:6px">Affected zones are highlighted directly on the map. The number is the count of distinct seasonal VTEC events; click a zone to see issue dates. Updates/amendments to the same ETN count once.</div>
         <div id="productCounterStatus" class="small" style="margin-top:7px;color:#9fc5d9;font-weight:700">Loading event polygons…</div>
@@ -396,7 +396,7 @@ function buildProductFilters(){
   const counter=document.getElementById('productCounterType');
   if(counter){
     counter.innerHTML=current.concat(legacy).map((n,i)=>'<option value="'+esc(n)+'" '+(n==='Freeze Warning'?'selected':'')+'>'+esc(n)+'</option>').join('');
-    counter.addEventListener('change',renderProductCounter);
+    counter.addEventListener('change',()=>setProductDisplay('count')); document.getElementById('productEventMode').addEventListener('click',()=>setProductDisplay('event')); document.getElementById('productCountMode').addEventListener('click',()=>setProductDisplay('count'));
   }
 }
 
@@ -451,6 +451,7 @@ function normalizeFrequencyStationsStrict(data){
 }
 
 async function mergeCwopDailyIntoFrequency(data){
+  if(data?.stationMode==='asosawos')return;
   if(!data||!data.countiesGeoJson||!data.countyStats)return;
   try{
     const r=await fetch('./data/cwop_daily.json',{cache:'no-store'});
@@ -607,7 +608,7 @@ function countySeriesThrough(s,maxIndex,kind){
 }
 function renderFrequency(){if(!state.data)return;if(state.freqCountyLayer)state.frequencyMap.removeLayer(state.freqCountyLayer);state.freqLabelLayer.clearLayers();state.freqStationLayer.clearLayers();const idx=Math.max(0,Math.min(state.timelineIndex,state.data.dates.length-1)),metric=state.freqMetric,visible=Object.values(state.data.countyStats).filter(s=>cwaVisible(s.wfo)),metricValues=[];state.freqCountyLayer=L.geoJSON(state.data.countiesGeoJson,{style:f=>{const s=state.data.countyStats[String(f.properties.fips).padStart(5,'0')];if(!s||!cwaVisible(s.wfo))return{color:'#33485e',weight:.5,fillOpacity:.03,fillColor:'#13202d'};if(metric==='since'){const age=daysSinceLastHit(s,idx);if(age!==null)metricValues.push(age);return{color:age===null?'#596979':'#c8f5ff',weight:age===0?1.6:.8,fillColor:daysSinceColor(age),fillOpacity:age===null?.18:.76}}const c=countForCountyThrough(s,idx);metricValues.push(c);return{color:'#8fa6bd',weight:.7,fillColor:countColor(c),fillOpacity:.72}},onEachFeature:(f,l)=>{const s=state.data.countyStats[String(f.properties.fips).padStart(5,'0')];if(!s)return;if(metric==='since'){const age=daysSinceLastHit(s,idx),last=lastHitDateThrough(s,idx);l.bindTooltip((s.county||'')+', '+s.state+' · '+(age===null?'Not met':age===0?'Hit today':age+' days since')+(last?' · '+last:''),{sticky:true,className:'county-tip'})}else l.bindTooltip((s.county||'')+', '+s.state+' · '+countForCountyThrough(s,idx)+' hits through '+state.data.dates[idx],{sticky:true,className:'county-tip'});l.bindPopup(()=>countyPopup(s))}}).addTo(state.frequencyMap);
 if(document.getElementById('showCounts').checked){visible.forEach(s=>{if(!Number.isFinite(s.lat)||!Number.isFinite(s.lon))return;let label;if(metric==='since'){const age=daysSinceLastHit(s,idx);label=age===null?'—':String(age)}else label=String(countForCountyThrough(s,idx));const dateLabel=formatShortDate(state.data.dates[idx]);L.marker([s.lat,s.lon],{interactive:false,icon:L.divIcon({className:'county-label',html:'<div class="county-count-wrap"><div class="county-count-main">'+label+'</div><div class="county-count-date">('+dateLabel+')</div></div>',iconSize:[56,28],iconAnchor:[28,14]})}).addTo(state.freqLabelLayer)})}
-if(document.getElementById('showStations').checked){visible.forEach(s=>(s.stations||[]).filter(st=>!isFrequencyStationExcluded(st)).forEach(st=>L.circleMarker([st.lat,st.lon],{radius:3,color:'#06101a',weight:1,fillColor:'#d8f7ff',fillOpacity:.95}).bindTooltip(st.id+' · '+st.name).addTo(state.freqStationLayer)))}
+if(document.getElementById('showStations').checked){visible.forEach(s=>activeFrequencyStations(s).forEach(st=>{const value=stationValueForIndex(st,idx),hit=stationQualifiesForIndex(st,s,idx);L.circleMarker([st.lat,st.lon],{radius:4,color:'#06101a',weight:1,fillColor:hit?'#4bf0a0':isNum(value)?'#d8f7ff':'#687787',fillOpacity:.95}).bindTooltip(esc(st.id)+' · '+esc(st.name)+' · '+(isNum(value)?fmt(value)+'°F':'No data')).bindPopup(()=>frequencyStationPopup(st,s)).addTo(state.freqStationLayer)}))}
 document.getElementById('freqSeason').textContent=state.data.season.label;document.getElementById('freqThreshold').textContent=modeLabel();if(metric==='since'){const ages=visible.map(s=>daysSinceLastHit(s,idx)),met=ages.filter(v=>v!==null);document.getElementById('freqMaxLabel').textContent='Longest since last hit';document.getElementById('freqCountiesLabel').textContent='Counties met this season';document.getElementById('freqMax').textContent=met.length?Math.max(...met)+' d':'—';document.getElementById('freqCounties').textContent=met.length;document.getElementById('thresholdDescription').textContent='As of '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();document.getElementById('lastHitNote').innerHTML='<b>Map:</b> number of days since each county last met the selected threshold. “Not met” means no hit yet this season.'}else{const counts=visible.map(s=>countForCountyThrough(s,idx));document.getElementById('freqMaxLabel').textContent='Highest cumulative count';document.getElementById('freqCountiesLabel').textContent='Counties with ≥1 hit';document.getElementById('freqMax').textContent=counts.length?Math.max(...counts):'—';document.getElementById('freqCounties').textContent=counts.filter(v=>v>0).length;document.getElementById('thresholdDescription').textContent='Through '+formatDayLabel(state.data.dates[idx])+' · '+modeDescription();document.getElementById('lastHitNote').innerHTML='<b>Map:</b> cumulative number of threshold hits from Sep 1 through the selected date.'}updateTimelineDate();updateFrequencyLegend()}
 function cwaVisible(wfo){return state.cwaFilter==='ALL'||wfo===state.cwaFilter}
 function countForCountyThrough(s,maxIndex){let count=0;const end=Math.max(0,Math.min(Number(maxIndex),state.data.dates.length-1));for(let i=0;i<=end;i++)if(hitForCountyIndex(s,i))count++;return count}
@@ -627,6 +628,11 @@ function updateFrequencyLegend(){if(!state.freqLegendDiv)return;if(state.freqMet
 function addFrequencyLegend(){const ctl=L.control({position:'bottomright'});ctl.onAdd=()=>{const d=L.DomUtil.create('div','legend');state.freqLegendDiv=d;return d};ctl.addTo(state.frequencyMap);updateFrequencyLegend()}
 function stationValueForIndex(st,i){const t=saneAirTempF((st.dailyMinTemp||[])[i]),f=saneApparentF((st.dailyMinFeel||[])[i]);return(state.selectedMode==='cwa'||state.selectedMode==='ecw')?minFinite(t,f):t}
 function stationQualifiesForIndex(st,s,i){const t=saneAirTempF((st.dailyMinTemp||[])[i]),f=saneApparentF((st.dailyMinFeel||[])[i]),a=minFinite(t,f);if(state.selectedMode==='custom')return isNum(t)&&t<=state.threshold;if(state.selectedMode==='frost')return isNum(t)&&t<=37;if(state.selectedMode==='freeze')return isNum(t)&&t<=32;if(state.selectedMode==='hardfreeze')return isNum(t)&&t<=25;if(state.selectedMode==='cwa')return isNum(a)&&isNum(s.criteria.coldAdvisory)&&a<=s.criteria.coldAdvisory;if(state.selectedMode==='ecw')return isNum(a)&&isNum(s.criteria.extremeCold)&&a<=s.criteria.extremeCold;return false}
+function frequencyStationPopup(st,s){
+ const idx=state.timelineIndex,rows=[];let hits=0,available=0;
+ for(let i=0;i<=idx;i++){const t=saneAirTempF((st.dailyMinTemp||[])[i]),a=saneApparentF((st.dailyMinFeel||[])[i]),v=stationValueForIndex(st,i),hit=stationQualifiesForIndex(st,s,i);if(isNum(v))available++;if(hit)hits++;rows.push('<div>'+esc(state.data.dates[i])+' · T '+(isNum(t)?fmt(t)+'°F':'—')+' · ApT '+(isNum(a)?fmt(a)+'°F':'—')+' · '+(hit?'HIT':isNum(v)?'Not met':'No data')+'</div>')}
+ return '<b>'+esc(st.id)+' · '+esc(st.name)+'</b><br>'+esc(st.type||'OBS')+' · '+esc(s.county)+', '+esc(s.state)+'<br><b>'+esc(modeLabel())+' · '+hits+' qualifying days</b><br>'+available+' days with usable values through '+esc(state.data.dates[idx])+'<div class="popup-rule"></div><div style="max-height:240px;overflow:auto">'+rows.reverse().join('')+'</div>';
+}
 function countyPopup(s){
   const dates=hitDatesThrough(s,state.timelineIndex),streak=latestStreak(dates),minT=minArray(countySeriesThrough(s,state.timelineIndex,'temp')),minF=minArray(countySeriesThrough(s,state.timelineIndex,'feel')),age=daysSinceLastHit(s,state.timelineIndex),last=lastHitDateThrough(s,state.timelineIndex);
   const stationDaily=activeFrequencyStations(s),qualifying=[],
@@ -682,12 +688,14 @@ function productCounterDate(e){
   if(isNaN(d))return String(raw).slice(0,10);
   return new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',year:'numeric'}).format(d);
 }
+function setProductDisplay(mode){state.productDisplay=mode;document.getElementById('productEventMode').classList.toggle('active',mode==='event');document.getElementById('productCountMode').classList.toggle('active',mode==='count');if(mode==='count'){state.selectedEvent=null;state.eventPointResults=[];state.verificationLayer.clearLayers();renderEventList()}renderProducts()}
 function renderProductCounter(){
   const sel=document.getElementById('productCounterType'),
         status=document.getElementById('productCounterStatus');
   if(!sel||!state.productCounterLayer||!state.productCounterLabelLayer)return;
   state.productCounterLayer.clearLayers();
   state.productCounterLabelLayer.clearLayers();
+  if(state.productDisplay!=='count'){if(status)status.textContent='Select ZONE COUNTS to display seasonal totals.';return}
 
   const type=sel.value,
         events=(state.events||[]).filter(e=>e.type===type),
@@ -751,8 +759,8 @@ function renderProductCounter(){
 }
 
 function renderEventList(){const list=document.getElementById('eventList');const visible=state.events.filter(e=>state.productTypes.has(e.type));if(!visible.length){list.innerHTML='<div class="small">No selected cold-product VTEC events found for '+esc(state.productCwa)+'.</div>';return}list.innerHTML=visible.map(e=>{const p=e.pointSummary;let verification=p?(' · '+p.hits+'H/'+(p.misses||0)+'M'):'';return'<div class="event '+(state.selectedEvent&&state.selectedEvent.id===e.id?'active':'')+'" data-event="'+esc(e.id)+'"><div class="event-head"><span>'+esc(e.type)+'</span><span class="event-pill neutral">ETN '+esc(e.etn)+verification+'</span></div><div class="event-sub">'+esc(eventTimeLabel(e))+'</div></div>'}).join('');list.querySelectorAll('.event').forEach(el=>el.addEventListener('click',()=>selectEvent(el.dataset.event)))}
-async function selectEvent(id){const e=state.events.find(x=>x.id===id);if(!e)return;state.selectedEvent=e;state.eventPointResults=[];state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';document.getElementById('eventCountyCount').textContent='—';document.getElementById('eventHitCount').textContent='—';renderEventList();await fetchEventGeo(e);renderProducts();if(e.geojson){const layer=L.geoJSON(e.geojson);const b=layer.getBounds();if(b.isValid())state.productsMap.fitBounds(b,{padding:[30,30]})}await loadEventPointVerification(e)}
-function renderProducts(){renderProductCounter();if(state.productLayer)state.productsMap.removeLayer(state.productLayer);const selected=state.selectedEvent,features=[];if(selected&&state.productTypes.has(selected.type))eventFeatures(selected).forEach(f=>features.push({type:'Feature',geometry:f.geometry,properties:Object.assign({},f.properties||{},{eventId:selected.id,eventType:selected.type})}));state.productLayer=L.geoJSON({type:'FeatureCollection',features},{pane:'hazardPane',style:f=>{const e=state.events.find(x=>x.id===f.properties.eventId),st=PRODUCT_STYLE[(e||{}).type]||{color:'#9fb2c6'};return{color:st.color,weight:3.2,opacity:1,fillColor:st.color,fillOpacity:.24}},onEachFeature:(f,l)=>{const e=state.events.find(x=>x.id===f.properties.eventId);if(!e)return;l.bindTooltip(e.type+' · ETN '+e.etn+' · '+eventTimeLabel(e),{sticky:true,className:'county-tip'})}}).addTo(state.productsMap);renderSelectedEventDetail()}
+async function selectEvent(id){const e=state.events.find(x=>x.id===id);if(!e)return;state.productDisplay='event';document.getElementById('productEventMode').classList.add('active');document.getElementById('productCountMode').classList.remove('active');state.productCounterLayer.clearLayers();state.productCounterLabelLayer.clearLayers();state.selectedEvent=e;state.eventPointResults=[];state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';document.getElementById('eventCountyCount').textContent='—';document.getElementById('eventHitCount').textContent='—';renderEventList();await fetchEventGeo(e);renderProducts();if(e.geojson){const layer=L.geoJSON(e.geojson);const b=layer.getBounds();if(b.isValid())state.productsMap.fitBounds(b,{padding:[30,30]})}await loadEventPointVerification(e)}
+function renderProducts(){renderProductCounter();if(state.productDisplay==='count')state.verificationLayer.clearLayers();if(state.productLayer)state.productsMap.removeLayer(state.productLayer);const selected=state.selectedEvent,features=[];if(selected&&state.productTypes.has(selected.type))eventFeatures(selected).forEach(f=>features.push({type:'Feature',geometry:f.geometry,properties:Object.assign({},f.properties||{},{eventId:selected.id,eventType:selected.type})}));state.productLayer=L.geoJSON({type:'FeatureCollection',features},{pane:'hazardPane',style:f=>{const e=state.events.find(x=>x.id===f.properties.eventId),st=PRODUCT_STYLE[(e||{}).type]||{color:'#9fb2c6'};return{color:st.color,weight:3.2,opacity:1,fillColor:st.color,fillOpacity:.24}},onEachFeature:(f,l)=>{const e=state.events.find(x=>x.id===f.properties.eventId);if(!e)return;l.bindTooltip(e.type+' · ETN '+e.etn+' · '+eventTimeLabel(e),{sticky:true,className:'county-tip'})}}).addTo(state.productsMap);renderSelectedEventDetail()}
 function renderSelectedEventDetail(){const e=state.selectedEvent;if(!e){document.getElementById('eventDetail').textContent='Select an event. Each row is one VTEC lifecycle from valid start through final valid end, even when it crosses midnight.';document.getElementById('eventCountyCount').textContent='—';document.getElementById('eventHitCount').textContent='—';document.getElementById('pointList').innerHTML='';return}const live=Date.parse(e.end)>Date.now();const browser='https://mesonet.agron.iastate.edu/vtec/?year='+e.vtecYear+'&wfo='+e.wfo+'&phenomena='+e.phenom+'&significance='+e.sig+'&eventid='+String(e.etn).padStart(4,'0');document.getElementById('eventDetail').innerHTML='<b>'+esc(e.type)+'</b> · ETN '+e.etn+(live?'<span class="live-tag">IN EFFECT</span>':'')+'<br>'+esc(eventTimeLabel(e))+'<br><a class="event-source-link" href="'+browser+'" target="_blank" rel="noopener">OPEN IEM VTEC EVENT ↗</a>'}
 async function ensureStationCatalog(){if(state.stationCatalog)return state.stationCatalog;await loadStationCatalog();return state.stationCatalog}
 
@@ -976,7 +984,8 @@ async function loadCwopSupplement(e,start,finish){
     else{const cls=classifyVerificationResult(base,e);base.hit=cls.hit;base.resultCode=cls.code;base.inHazard=cls.inHazard}
     scored.push(base);
   }
-  renderSupplementPoints(scored,'Synoptic CWOP / APRS','#62b7d9','#d2f2ff','CWOP');
+  if(state.selectedEvent!==e||state.productDisplay==='count')return;
+  renderSupplementPoints(scored,'Synoptic Mesonet / CWOP','#62b7d9','#d2f2ff','CWOP');
 }
 async function loadEventPointVerification(e){renderSelectedEventDetail();resetVerificationTotals();state.primaryMetarSkySamples=[];state.sourceCounts={METAR:0,COOP:0,RWIS:0,USCRN:0,DCP:0,CWOP:0};updatePointSourceSummary();const start=new Date(e.begin),finish=new Date(Math.min(Date.parse(e.end),Date.now()));if(isNaN(start)||isNaN(finish)||finish<=start){showPointError('This event has not reached its valid observation window yet.');return}state.verificationLayer.clearLayers();document.getElementById('pointList').innerHTML='<div class="small">Loading exact-window observations…</div>';let primaryResults=[];try{const cat=await ensureStationCatalog();if(cat){
   // Season Products primary METAR verification must only query true aviation
@@ -1202,6 +1211,7 @@ function frostExplanationHtml(r){
 function pointCriterion(st,e){const c=st.criteria||{};if(e.type==='Frost Advisory')return{threshold:40,metric:'potfrost',label:'Observed PotFrost ≥40 (Areas/Widespread)'};if(e.type==='Freeze Watch'||e.type==='Freeze Warning')return{threshold:32,metric:'temp',label:'Freeze ≤32°F'};if(e.type==='Cold Weather Advisory')return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Local Cold Advisory'};if(e.type==='Extreme Cold Watch'||e.type==='Extreme Cold Warning')return{threshold:num(c.extremeCold),metric:'apparent',label:'Local Extreme Cold'};if(e.type==='Legacy Hard Freeze')return{threshold:25,metric:'temp',label:'Hard freeze ≤25°F'};return{threshold:num(c.coldAdvisory),metric:'apparent',label:'Legacy wind chill proxy'}}
 function resetVerificationTotals(){state.verificationTotals={points:0,hits:0,warnings:0,misses:0}}
 function addVerificationTotals(rows){
+  if(state.productDisplay==='count')return;
   if(!state.verificationTotals)resetVerificationTotals();
   (rows||[]).forEach(r=>{
     if(!r||!r.hasData)return;
@@ -1213,6 +1223,7 @@ function addVerificationTotals(rows){
   document.getElementById('eventHitCount').textContent=state.verificationTotals.hits+' GREEN · '+state.verificationTotals.warnings+' YELLOW · '+state.verificationTotals.misses+' RED';
 }
 function renderEventPointResults(e,results){
+  if(state.selectedEvent!==e||state.productDisplay==='count')return;
   state.verificationLayer.clearLayers();
   const usable=results.filter(r=>r.hasData),display=results.filter(r=>r.station&&isNum(r.station.lat)&&isNum(r.station.lon)),hits=display.filter(r=>r.resultCode==='HIT').length,misses=display.filter(r=>r.resultCode==='MISS').length;
   state.sourceCounts.METAR=usable.length;updatePointSourceSummary();
