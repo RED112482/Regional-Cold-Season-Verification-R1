@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Build compact CWOP/APRS verification history from Synoptic Data.
+"""Build compact supplemental mesonet verification history from Synoptic Data.
 
-Uses network 65 (APRSWXNET/CWOP), discovers stations by CWA, then downloads
-7-day time series in small batches.  Requires SYNOPTIC_TOKEN in the environment.
+Discovers active public air-temperature stations by CWA/state, including
+APRSWXNET/CWOP and other MADIS/National Mesonet providers, then downloads
+time series in small batches. Requires SYNOPTIC_TOKEN in the environment.
 """
 from __future__ import annotations
 
@@ -173,10 +174,7 @@ def county_for_point(counties, lon, lat):
 
 
 def add_discovered_station(stations, srow, counties, fallback_cwa=""):
-    mnet = str(srow.get("MNET_ID") or "").strip()
-    if mnet and mnet != NETWORK:
-        return False
-    stid = str(srow.get("STID") or "").strip()
+    stid = str(srow.get("STID") or "").strip().upper()
     lat = num(srow.get("LATITUDE"))
     lon = num(srow.get("LONGITUDE"))
     if not stid or lat is None or lon is None:
@@ -185,10 +183,13 @@ def add_discovered_station(stations, srow, counties, fallback_cwa=""):
     cwa = county["cwa"] if county else str(fallback_cwa or "").upper()
     if cwa not in CWAS:
         return False
+    mnet = str(srow.get("MNET_ID") or "").strip()
+    provider = "Synoptic APRSWXNET/CWOP" if mnet == NETWORK else ("Synoptic/MADIS network " + mnet if mnet else "Synoptic/MADIS")
     stations[stid] = {
         "id": stid,
         "name": srow.get("NAME") or stid,
-        "provider": "Synoptic APRSWXNET/CWOP",
+        "provider": provider,
+        "networkId": mnet,
         "lat": lat,
         "lon": lon,
         "cwa": cwa,
@@ -200,63 +201,43 @@ def add_discovered_station(stations, srow, counties, fallback_cwa=""):
 
 
 def discover():
-    """Discover active CWOP/APRS stations and assign them by actual county polygon."""
+    """Discover active public air-temperature stations and assign by county polygon."""
     stations = {}
     errors = []
     counties = load_counties()
 
-    # First use the efficient CWA-scoped discovery.
+    # Primary discovery: every active station with air temperature in each CWA.
+    # This intentionally spans APRSWXNET/CWOP plus other public MADIS/National
+    # Mesonet providers so rural counties are not limited to airport/COOP sites.
     for cwa in CWAS:
         try:
             d = get_json("stations/latest", {
                 "cwa": cwa,
-                "network": NETWORK,
                 "status": "active",
+                "vars": "air_temp",
                 "units": "english,speed|kts",
                 "obtimezone": "UTC",
                 "qc": "off",
             })
             summary = d.get("SUMMARY") or {}
-            code = str(summary.get("RESPONSE_CODE", ""))
-            if code != "1":
+            if str(summary.get("RESPONSE_CODE", "")) != "1":
                 errors.append(f"{cwa} latest API: {summary}")
                 continue
-
             rows = d.get("STATION", []) or []
-            print(f"{cwa} latest stations returned:", len(rows))
-
-            for s in rows:
-                add_discovered_station(stations, s, counties, fallback_cwa=cwa)
-
-                stid = str(s.get("STID") or "").strip()
-                mnet = str(s.get("MNET_ID") or "").strip()
-                if stid == "G1930":
-                    obs = s.get("OBSERVATIONS") or {}
-                    temp = None
-                    temp_time = None
-                    for key, value in obs.items():
-                        if key.startswith("air_temp_value_") and isinstance(value, dict):
-                            temp = num(value.get("value"))
-                            temp_time = value.get("date_time")
-                            break
-                    print(
-                        "FOUND G1930 in discovery:",
-                        "MNET_ID=", mnet,
-                        "tempF=", temp,
-                        "time=", temp_time,
-                    )
+            print(f"{cwa} supplemental air-temp stations returned:", len(rows))
+            for row in rows:
+                add_discovered_station(stations, row, counties, fallback_cwa=cwa)
         except Exception as exc:
             errors.append(f"{cwa} latest: {type(exc).__name__}: {exc}")
 
-    # CWA metadata is not reliable for every APRSWXNET station. Discover the
-    # same network by state as a fallback, then accept a station only if its
-    # coordinates fall inside one of our NOAA county polygons.
+    # State fallback catches stations whose CWA metadata is incomplete/stale.
+    # County polygons remain the final authority for inclusion.
     for state in REGIONAL_STATES:
         try:
             d = get_json("stations/latest", {
                 "state": state,
-                "network": NETWORK,
                 "status": "active",
+                "vars": "air_temp",
                 "units": "english,speed|kts",
                 "obtimezone": "UTC",
                 "qc": "off",
@@ -266,32 +247,18 @@ def discover():
                 errors.append(f"{state} state latest API: {summary}")
                 continue
             rows = d.get("STATION", []) or []
-            print(f"{state} state fallback stations returned:", len(rows))
+            print(f"{state} supplemental state stations returned:", len(rows))
             for row in rows:
                 add_discovered_station(stations, row, counties)
         except Exception as exc:
             errors.append(f"{state} state latest: {type(exc).__name__}: {exc}")
 
-    # Targeted safeguard for the known Chatom CWOP station. This does not
-    # bypass geometry: it is still accepted only when its coordinates land
-    # inside one of the regional county polygons.
-    try:
-        d = get_json("stations/latest", {
-            "stid": "G1930",
-            "network": NETWORK,
-            "status": "active",
-            "units": "english,speed|kts",
-            "obtimezone": "UTC",
-            "qc": "off",
-        })
-        for row in d.get("STATION", []) or []:
-            if add_discovered_station(stations, row, counties):
-                print("G1930 targeted discovery accepted by county polygon")
-    except Exception as exc:
-        errors.append(f"G1930 targeted latest: {type(exc).__name__}: {exc}")
+    # Keep explicit diagnostics for examples/known rural stations when present.
+    for stid in ("G4508", "GW4508", "E3034", "AW815", "G1930"):
+        if stid in stations:
+            print("Supplemental station discovered:", stid, stations[stid].get("provider"), stations[stid].get("countyName"))
 
     return stations, errors
-
 
 def chunked(items, n):
     for i in range(0, len(items), n):
@@ -367,7 +334,8 @@ def update_daily_archive(stations, now):
             "lat": round(meta["lat"], 5),
             "lon": round(meta["lon"], 5),
             "cwa": meta.get("cwa") or "",
-            "provider": "Synoptic APRSWXNET/CWOP",
+            "provider": meta.get("provider") or "Synoptic/MADIS",
+            "networkId": meta.get("networkId") or "",
         }
 
     step = timedelta(days=7)
@@ -424,7 +392,7 @@ def update_daily_archive(stations, now):
 
     archive = {
         "generatedUtc": now.isoformat().replace("+00:00", "Z"),
-        "source": "Synoptic Data APRSWXNET/CWOP network 65",
+        "source": "Synoptic Data active public air-temperature stations (MADIS/National Mesonet/CWOP)",
         "seasonStart": season_start.astimezone(LOCAL_TZ).date().isoformat(),
         "backfillCompleteSeason": season_key,
         "metadata": [metadata[k] for k in sorted(metadata)],
@@ -534,7 +502,7 @@ def main():
                     obs_out.append({
                         "id": stid,
                         "name": meta["name"],
-                        "provider": "Synoptic APRSWXNET/CWOP",
+                        "provider": meta.get("provider") or "Synoptic/MADIS",
                         "lat": round(meta["lat"], 5),
                         "lon": round(meta["lon"], 5),
                         "cwa": meta["cwa"],
